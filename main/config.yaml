@@ -1,0 +1,10 @@
+# QAQC file with the eDNA samples and associated metadata
+quagmire_info:
+  quagmire_file: /Users/zalmanek/Development/PMEL-OME-OCNMS/QAQCMRE_CruiseSampleMetadata_OCNMS21to23.csv # the path to the QAQC csv file
+  site_col_name: Cast # The name of the column in the QAQC (aka quagmire file) to get the site ids
+
+# Mooring data 
+mooring_mat_files: # Takes a list of .mat files (in case we want to aggregate a bunch together. Right now doing OCNMS 2021-2023)
+  - /Users/zalmanek/Development/Ocean-Data-Aggregator/mat/2021.mat # .mat file Point to directory with those files.
+  - /Users/zalmanek/Development/Ocean-Data-Aggregator/mat/2022.mat
+  - /Users/zalmanek/Development/Ocean-Data-Aggregator/mat/2023.mat
