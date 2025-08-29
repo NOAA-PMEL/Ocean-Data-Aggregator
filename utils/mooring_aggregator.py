@@ -1,5 +1,5 @@
 from utils.aggregator import Aggregator
-from utils.mat_file_processor import MatFileProcessor
+from utils.mat_process_v2 import MatFileProcessor
 from utils.netcdf_processor import NetcdfProcessor
 from pathlib import Path
 import pandas as pd
@@ -29,9 +29,9 @@ class MooringAggregator(Aggregator):
         ).tolist()
         self.min_date, self.max_date = self.get_quag_min_and_max_dates()
         self.min_depth, self.max_depth = self.get_min_and_max_depths()
-        # self.mooring_df = self.convert_mat_files_to_df()
+        self.mooring_df = self.convert_mat_files_to_df()
         # self.ctd_from_netcdf_df = self.convert_ctd_nc_files_to_df()
-        self.ocean_model_df = self.convert_ocean_model_nc_to_df()
+        # self.ocean_model_df = self.convert_ocean_model_nc_to_df()
 
     def get_quag_min_and_max_dates(self) -> tuple:
         """
