@@ -54,19 +54,30 @@ class MatFileProcessor:
         """
         units_map = {}
         param_mappings = {
+            't090': 'temp',
             'temperature': 'temp',
+            'c0s/m': 'cond',
             'conductivity': 'cond', 
+            'pr': 'pres',
             'pressure': 'pres',
+            'sal00': 'sal',
             'salinity': 'sal',
+            'sigma': 'dens',
             'density': 'dens'
         }
         
         for label in col_labels:
-            unit_match = re.search(r'\[(.*?)\]', label)
+            # Handle the string format and remove carriage returns
+            clean_label = label.strip().replace('\r\n', '').replace('\r', '')
+            unit_match = re.search(r'\[(.*?)\]', clean_label)
             if unit_match:
                 unit = unit_match.group(1).strip()
+                
+                # Extract parameter name (part before the colon)
+                param_part = clean_label.split(':')[0].strip().lower()
+                
                 for param_name, short_name in param_mappings.items():
-                    if param_name in label.lower():
+                    if param_name in param_part:
                         units_map[short_name] = unit
                         break
         
@@ -119,10 +130,14 @@ class MatFileProcessor:
         except (ValueError, IndexError):
             depth_m = np.nan
         
-        # Extract deployment time
+        # Extract deployment time - handle both string and datenum formats
         try:
             deployment_time_raw = file_data_dict[f'{var}_db_DeploymentTime']
-            if isinstance(deployment_time_raw, (int, float)):
+            if isinstance(deployment_time_raw, str):
+                # Handle string format like '2021-06-04 19:00:00'
+                deployment_time = pd.to_datetime(deployment_time_raw)
+            elif isinstance(deployment_time_raw, (int, float)):
+                # Handle MATLAB datenum format
                 deployment_time = self._matlab_datenum_to_datetime(deployment_time_raw)
             else:
                 deployment_time = pd.to_datetime(deployment_time_raw)
@@ -140,7 +155,7 @@ class MatFileProcessor:
             file_data_dict: Flattened data dictionary
             var: Variable name
             units_map: Mapping of parameter names to units
-            deployment_time: Deployment timestamp for time conversion
+            deployment_time: Deployment timestamp (not used for time conversion)
             
         Returns:
             Dictionary of processed time-series data
@@ -164,29 +179,13 @@ class MatFileProcessor:
         
         for short_name, data_array in time_series_data.items():
             if short_name == 'time':
-                # Convert MATLAB datenum time to actual datetime
-                if pd.notna(deployment_time):
-                    # If we have deployment time, convert relative time to absolute
-                    datetime_array = [
-                        self._matlab_datenum_to_datetime(t) if not np.isnan(t) else pd.NaT 
-                        for t in data_array
-                    ]
-                    processed_data['datetime'] = datetime_array
-                    
-                    # Also keep time since deployment in hours for convenience
-                    time_since_deployment = [
-                        (dt - deployment_time).total_seconds() / 3600 
-                        if pd.notna(dt) and pd.notna(deployment_time) else np.nan
-                        for dt in datetime_array
-                    ]
-                    processed_data['time_since_deployment_hours'] = time_since_deployment
-                else:
-                    # If no deployment time, just convert the raw time
-                    datetime_array = [
-                        self._matlab_datenum_to_datetime(t) if not np.isnan(t) else pd.NaT 
-                        for t in data_array
-                    ]
-                    processed_data['datetime'] = datetime_array
+                # The 'time' variable contains MATLAB datenums representing absolute timestamps
+                # Convert these to pandas Timestamps
+                datetime_array = [
+                    self._matlab_datenum_to_datetime(t) if not np.isnan(t) else pd.NaT 
+                    for t in data_array
+                ]
+                processed_data['measurement_datetime'] = datetime_array
             else:
                 # Apply units to column name
                 unit = units_map.get(short_name)
