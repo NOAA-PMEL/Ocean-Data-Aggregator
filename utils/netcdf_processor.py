@@ -14,7 +14,14 @@ class NetcdfProcessor:
         Concerts a CTD netCDF file to a dataframe. Extracts the date/time and station_id from the file name
         """
         with xr.open_dataset(self.nc_file) as nc_file:
-            nc_df = nc_file.to_dataframe()
+
+            # Get units
+            new_col_name_dict = self.get_units_from_nc_vars(
+                avg_xr_ds=nc_file, original_xr_ds=nc_file)
+
+            ds_final = nc_file.rename(new_col_name_dict)
+
+            nc_df = ds_final.to_dataframe()
             nc_df = nc_df.reset_index()
 
             # Extract the station and date from the file name. Hopefully this is consistent across projects.
