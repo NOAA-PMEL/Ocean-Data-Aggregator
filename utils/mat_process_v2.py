@@ -41,47 +41,7 @@ class MatFileProcessor:
             current_path = f"{parent_path}_{field}"
             MatFileProcessor._process_mat_struct(field_data, current_path, data_dict)
 
-    @staticmethod
-    def _extract_units_from_labels(col_labels: list) -> dict:
-        """
-        Extract units from column labels that contain units in square brackets.
-        
-        Args:
-            col_labels: List of column labels
-            
-        Returns:
-            Dictionary mapping parameter names to their units
-        """
-        units_map = {}
-        param_mappings = {
-            't090': 'temp',
-            'temperature': 'temp',
-            'c0s/m': 'cond',
-            'conductivity': 'cond', 
-            'pr': 'pres',
-            'pressure': 'pres',
-            'sal00': 'sal',
-            'salinity': 'sal',
-            'sigma': 'dens',
-            'density': 'dens'
-        }
-        
-        for label in col_labels:
-            # Handle the string format and remove carriage returns
-            clean_label = label.strip().replace('\r\n', '').replace('\r', '')
-            unit_match = re.search(r'\[(.*?)\]', clean_label)
-            if unit_match:
-                unit = unit_match.group(1).strip()
-                
-                # Extract parameter name (part before the colon)
-                param_part = clean_label.split(':')[0].strip().lower()
-                
-                for param_name, short_name in param_mappings.items():
-                    if param_name in param_part:
-                        units_map[short_name] = unit
-                        break
-        
-        return units_map
+
 
     @staticmethod
     def _matlab_datenum_to_datetime(datenum: float) -> pd.Timestamp:
@@ -146,16 +106,13 @@ class MatFileProcessor:
             
         return station_id, depth_m, deployment_time
 
-    def _process_time_series_data(self, file_data_dict: dict, var: str, 
-                                  units_map: dict, deployment_time: pd.Timestamp) -> dict:
+    def _process_time_series_data(self, file_data_dict: dict, var: str) -> dict:
         """
-        Process time-series data and apply proper column naming with units.
+        Process time-series data with clean column names.
         
         Args:
             file_data_dict: Flattened data dictionary
             var: Variable name
-            units_map: Mapping of parameter names to units
-            deployment_time: Deployment timestamp (not used for time conversion)
             
         Returns:
             Dictionary of processed time-series data
@@ -163,34 +120,32 @@ class MatFileProcessor:
         data_source = 'data'
         source_prefix = f'_{data_source}_'
         
-        # Extract time-series data
-        time_series_data = {
-            key.split('_')[-1]: value 
-            for key, value in file_data_dict.items()
+        # Extract time-series data - get the raw parameter names only
+        time_series_data = {}
+        for key, value in file_data_dict.items():
             if (source_prefix in key and 
                 isinstance(value, np.ndarray) and 
-                value.size > 0)
-        }
+                value.size > 0):
+                # Extract just the parameter name (last part after the final underscore)
+                param_name = key.split('_')[-1]
+                time_series_data[param_name] = value
         
         if not time_series_data:
             return {}
         
         processed_data = {}
         
-        for short_name, data_array in time_series_data.items():
-            if short_name == 'time':
-                # The 'time' variable contains MATLAB datenums representing absolute timestamps
-                # Convert these to pandas Timestamps
+        for param_name, data_array in time_series_data.items():
+            if param_name == 'time':
+                # Convert time to datetime
                 datetime_array = [
                     self._matlab_datenum_to_datetime(t) if not np.isnan(t) else pd.NaT 
                     for t in data_array
                 ]
                 processed_data['measurement_datetime'] = datetime_array
             else:
-                # Apply units to column name
-                unit = units_map.get(short_name)
-                column_name = f"{short_name}_{unit.replace(' ', '_')}" if unit else short_name
-                processed_data[column_name] = data_array
+                # Use the clean parameter name (temp, cond, pres, sal, dens)
+                processed_data[param_name] = data_array
         
         return processed_data
 
@@ -230,23 +185,12 @@ class MatFileProcessor:
             file_data_dict = {}
             self._process_mat_struct(info, var, file_data_dict)
 
-            # Extract units from column labels
-            units_map = {}
-            try:
-                col_labels = file_data_dict[f'{var}_file_collabels']
-                units_map = self._extract_units_from_labels(col_labels)
-                print(f"  Found units: {units_map}")
-            except KeyError:
-                print(f"  Warning: No 'file_collabels' found for {var}. Units will be omitted.")
-
             # Extract metadata
             station_id, depth_m, deployment_time = self._extract_metadata(var, file_data_dict)
             print(f"  Station: {station_id}, Depth: {depth_m}m, Deployment: {deployment_time}")
 
             # Process time-series data
-            processed_data = self._process_time_series_data(
-                file_data_dict, var, units_map, deployment_time
-            )
+            processed_data = self._process_time_series_data(file_data_dict, var)
             
             if not processed_data:
                 print(f"  No time-series data found for {var}. Skipping.")
