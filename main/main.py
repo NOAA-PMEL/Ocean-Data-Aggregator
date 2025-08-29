@@ -6,4 +6,4 @@ from utils.mooring_aggregator import MooringAggregator
 mooring_agg = MooringAggregator(
     config_yaml='/Users/zalmanek/Development/Ocean-Data-Aggregator/main/config.yaml')
 
-mooring_agg.mooring_df.to_csv('mooring_data.csv')
+mooring_agg.pps_df.to_csv('pps_data.csv')

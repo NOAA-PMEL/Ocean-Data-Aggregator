@@ -1,7 +1,7 @@
 # QAQC file with the eDNA samples and associated metadata
 quagmire_info:
   quagmire_file: /Users/zalmanek/Development/PMEL-OME-OCNMS/QAQCMRE_CruiseSampleMetadata_OCNMS21to23.csv # the path to the QAQC csv file
-  site_col_name: Cast # The name of the column in the QAQC (aka quagmire file) to get the site ids
+  station_site_col_name: Cast # The name of the column in the QAQC (aka quagmire file) to get the site ids
   depth_col_name: Depth_m # The name of the depth column - to get the range of depths from an ocean model .NC file
   date_col_name: Collection_Date_local # One of the date columns (just need the date, not the time), make sure all values exist - to get range of dates from ocean model data.
 
@@ -14,6 +14,10 @@ mooring_mat_files: # Takes a list of .mat files (in case we want to aggregate a 
 # NetCDF info (AKA the CTD data) The directory where all the net cdf files live with the station_ids in the folder names and file names
 ctd_data:
   net_cdf_dir: /Users/zalmanek/Development/PMEL-OME-OCNMS/Ella_combined_20250530/OCNMS_ctd_data_Ella/data/Olympic_Coast_National_Marine_Sanctuary_CTD_Data_2005_2023/netcdf_files/binned_profiles
+
+# A list of all the applicable PPS txt files
+pps_data:
+  pps_txt_files_dir: /Users/zalmanek/Documents/ocnms_pps_data # The directory where all the PPS data files live. Need to be all alone in there
 
 # Assumes will be .nc file right now. Setting up to take multiple files even though for OCNMS, only TH042 was used
 ocean_model_data:

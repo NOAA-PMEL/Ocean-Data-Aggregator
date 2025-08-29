@@ -107,7 +107,7 @@ class MatFileProcessor:
 
         return station_id, depth_m, deployment_time
 
-    def _process_time_series_data(self, file_data_dict: dict, var: str) -> dict:
+    def _process_time_series_data(self, file_data_dict: dict) -> dict:
         """
         Process time-series data with clean column names.
 
