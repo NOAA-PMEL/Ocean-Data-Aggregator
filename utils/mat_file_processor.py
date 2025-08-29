@@ -2,22 +2,35 @@ import scipy.io as sio
 import pandas as pd
 import re
 import numpy as np
+from datetime import datetime, timedelta
 
 
 class MatFileProcessor:
+    """
+    Processes MATLAB .mat files and converts them to pandas DataFrames.
+    Designed for OCNMS data structure but may work with similar formats.
+    """
 
     def __init__(self, sites: list, mat_file: str):
+        """
+        Initialize the processor.
 
-        # A list of the sites to grab (should match the what will be in the variable name in the .mat file)
+        Args:
+            sites: List of site IDs to process (should match variable names in .mat file)
+            mat_file: Path to the .mat file
+        """
         self.sites = sites
-        self.mat_file = mat_file  # The file path to the mat_file
+        self.mat_file = mat_file
 
     @staticmethod
-    def _process_mat_struct(mat_struct, parent_path, data_dict):
+    def _process_mat_struct(mat_struct, parent_path: str, data_dict: dict):
         """
-        Recursively processes a MATLAB struct and collects all data
-        into the provided data_dict. This is a static method as it does
-        not need access to the class instance attributes.
+        Recursively processes a MATLAB struct and collects all data.
+
+        Args:
+            mat_struct: MATLAB struct object
+            parent_path: Current path in the struct hierarchy
+            data_dict: Dictionary to store the flattened data
         """
         if not hasattr(mat_struct, '_fieldnames'):
             data_dict[parent_path] = mat_struct
@@ -29,110 +42,188 @@ class MatFileProcessor:
             MatFileProcessor._process_mat_struct(
                 field_data, current_path, data_dict)
 
-    def process_mat_data_like_ocnms(self) -> pd.DataFrame:
+    @staticmethod
+    def _matlab_datenum_to_datetime(datenum: float) -> pd.Timestamp:
         """
-        The main method to load the .mat file, process variables, and return a
-        single DataFrame with combined data. This has only been tested on OCNMS data's
-        .mat structure. May be different for other .mat files.
+        Convert MATLAB datenum to pandas Timestamp.
+        MATLAB datenum represents days since January 0, 0000 (proleptic Gregorian calendar).
+
+        Args:
+            datenum: MATLAB datenum value
+
+        Returns:
+            pandas Timestamp
         """
-        master_dataframe_list = []
+        # MATLAB's datenum epoch is January 0, 0000, but Python's datetime
+        # starts at January 1, 1970. The offset is 719529 days.
+        # January 1, 0001 (closest we can get)
+        matlab_epoch = datetime(1, 1, 1)
+
+        # More accurate approach: MATLAB datenum 1 = January 1, 0000
+        # January 1, 1970 (Unix epoch) = MATLAB datenum 719529
+        unix_epoch = datetime(1970, 1, 1)
+        days_since_unix_epoch = datenum - 719529
 
         try:
+            return pd.Timestamp(unix_epoch + timedelta(days=days_since_unix_epoch))
+        except (ValueError, OverflowError):
+            # Fallback for extreme dates
+            return pd.NaT
+
+    def _extract_metadata(self, var: str, file_data_dict: dict) -> tuple:
+        """
+        Extract metadata from the processed data dictionary.
+
+        Args:
+            var: Variable name
+            file_data_dict: Flattened data dictionary
+
+        Returns:
+            Tuple of (station_id, depth_m, deployment_time)
+        """
+        # Extract station ID
+        station_id = next((sid for sid in self.sites if sid in var), 'unknown')
+
+        # Extract depth from variable name (assumes format ends with depth)
+        try:
+            depth_m = int(var.split('_')[-1])
+        except (ValueError, IndexError):
+            depth_m = np.nan
+
+        # Extract deployment time - handle both string and datenum formats
+        try:
+            deployment_time_raw = file_data_dict[f'{var}_db_DeploymentTime']
+            if isinstance(deployment_time_raw, str):
+                # Handle string format like '2021-06-04 19:00:00'
+                deployment_time = pd.to_datetime(deployment_time_raw)
+            elif isinstance(deployment_time_raw, (int, float)):
+                # Handle MATLAB datenum format
+                deployment_time = self._matlab_datenum_to_datetime(
+                    deployment_time_raw)
+            else:
+                deployment_time = pd.to_datetime(deployment_time_raw)
+        except (KeyError, ValueError, TypeError):
+            deployment_time = pd.NaT
+
+        return station_id, depth_m, deployment_time
+
+    def _process_time_series_data(self, file_data_dict: dict, var: str) -> dict:
+        """
+        Process time-series data with clean column names.
+
+        Args:
+            file_data_dict: Flattened data dictionary
+            var: Variable name
+
+        Returns:
+            Dictionary of processed time-series data
+        """
+        data_source = 'data'
+        source_prefix = f'_{data_source}_'
+
+        # Extract time-series data - get the raw parameter names only
+        time_series_data = {}
+        for key, value in file_data_dict.items():
+            if (source_prefix in key and
+                isinstance(value, np.ndarray) and
+                    value.size > 0):
+                # Extract just the parameter name (last part after the final underscore)
+                param_name = key.split('_')[-1]
+                time_series_data[param_name] = value
+
+        if not time_series_data:
+            return {}
+
+        processed_data = {}
+
+        for param_name, data_array in time_series_data.items():
+            if param_name == 'time':
+                # Convert time to datetime
+                datetime_array = [
+                    self._matlab_datenum_to_datetime(
+                        t) if not np.isnan(t) else pd.NaT
+                    for t in data_array
+                ]
+                processed_data['measurement_datetime'] = datetime_array
+            else:
+                # Use the clean parameter name (temp, cond, pres, sal, dens)
+                processed_data[param_name] = data_array
+
+        return processed_data
+
+    def process_mat_data_like_ocnms(self) -> pd.DataFrame:
+        """
+        Main method to load the .mat file, process variables, and return a DataFrame.
+
+        Returns:
+            Combined DataFrame with all processed data
+        """
+        master_dataframes = []
+
+        # Load .mat file
+        try:
             mat_data = sio.loadmat(
-                self.mat_file, squeeze_me=True, struct_as_record=False)
+                self.mat_file, squeeze_me=True, struct_as_record=False
+            )
+            print(f"Successfully loaded {self.mat_file}")
         except FileNotFoundError:
             print(f"Error: The file '{self.mat_file}' was not found.")
             return pd.DataFrame()
+        except Exception as e:
+            print(f"Error loading .mat file: {e}")
+            return pd.DataFrame()
 
+        # Remove MATLAB metadata variables
         mat_data = {k: v for k, v in mat_data.items()
                     if not k.startswith('__')}
 
+        # Process each variable that matches our sites
         for var, info in mat_data.items():
-            if any(site_id in var for site_id in self.sites):
-                print(f"\n--- Processing variable: {var} ---")
+            if not any(site_id in var for site_id in self.sites):
+                continue
 
-                file_data_dict = {}
-                self._process_mat_struct(info, var, file_data_dict)
+            print(f"\n--- Processing variable: {var} ---")
 
-                # 1. Extract and parse units from file_collabels
-                units_map = {}
-                try:
-                    col_labels = file_data_dict[f'{var}_file_collabels']
-                    for label in col_labels:
-                        unit_match = re.search(r'\[(.*)\]', label)
-                        unit = unit_match.group(
-                            1).strip() if unit_match else None
-                        if 'temperature' in label:
-                            units_map['temp'] = unit
-                        elif 'conductivity' in label:
-                            units_map['cond'] = unit
-                        elif 'pressure' in label:
-                            units_map['pres'] = unit
-                        elif 'salinity' in label:
-                            units_map['sal'] = unit
-                        elif 'density' in label:
-                            units_map['dens'] = unit
-                except KeyError:
-                    print(
-                        f"  Warning: No 'file_collabels' found for {var}. Units will be omitted.")
+            # Flatten the MATLAB struct
+            file_data_dict = {}
+            self._process_mat_struct(info, var, file_data_dict)
 
-                # 2. Extract metadata
-                station_id = next(
-                    (sid for sid in self.sites if sid in var), 'unknown')
+            # Extract metadata
+            station_id, depth_m, deployment_time = self._extract_metadata(
+                var, file_data_dict)
+            print(
+                f"  Station: {station_id}, Depth: {depth_m}m, Deployment: {deployment_time}")
 
-                try:
-                    depth_m = int(var.split('_')[-1])
-                except (ValueError, IndexError):
-                    depth_m = np.nan
+            # Process time-series data
+            processed_data = self._process_time_series_data(
+                file_data_dict, var)
 
-                try:
-                    deployment_time = pd.to_datetime(
-                        file_data_dict[f'{var}_db_DeploymentTime'])
-                except (KeyError, ValueError):
-                    deployment_time = pd.NaT
+            if not processed_data:
+                print(f"  No time-series data found for {var}. Skipping.")
+                continue
 
-                # 3. Process only the 'data' source for raw data
-                data_source = 'data'
-                source_prefix = f'_{data_source}_'
+            # Create DataFrame
+            num_rows = len(list(processed_data.values())[0])
 
-                time_series_data = {
-                    key.split('_')[-1]: value for key, value in file_data_dict.items()
-                    if source_prefix in key and isinstance(value, np.ndarray) and value.size > 0
-                }
+            # Add metadata columns
+            df_data = {
+                'station_id': np.full(num_rows, station_id),
+                'depth_m': np.full(num_rows, depth_m),
+                'deployment_time': np.full(num_rows, deployment_time),
+                **processed_data
+            }
 
-                if not time_series_data:
-                    print(f"  No time-series data found for {var}. Skipping.")
-                    continue
+            df = pd.DataFrame(df_data)
+            master_dataframes.append(df)
 
-                num_rows = len(list(time_series_data.values())[0])
-                final_df_data = {}
+            print(
+                f"  Successfully processed {var} with {num_rows} data points.")
 
-                # Add metadata columns
-                final_df_data['station_id'] = np.full(num_rows, station_id)
-                final_df_data['depth_m'] = np.full(num_rows, depth_m)
-                final_df_data['deployment_time'] = np.full(
-                    num_rows, deployment_time)
-
-                # --- DYNAMICALLY ADD TIME-SERIES COLUMNS WITH UNITS ---
-                for short_name, data_array in time_series_data.items():
-                    full_name = short_name
-                    if short_name == 'time':
-                        full_name = 'time_s_since_deployment'
-                    else:
-                        unit = units_map.get(short_name)
-                        if unit:
-                            full_name = f"{short_name}_{unit.replace(' ', '_')}"
-
-                    final_df_data[full_name] = data_array
-
-                # 4. Create the DataFrame
-                combined_df = pd.DataFrame(final_df_data)
-                master_dataframe_list.append(combined_df)
-
-                print(
-                    f"  Successfully processed {var} with {num_rows} data points.")
-
-        if master_dataframe_list:
-            return pd.concat(master_dataframe_list, ignore_index=True)
+        # Combine all DataFrames
+        if master_dataframes:
+            combined_df = pd.concat(master_dataframes, ignore_index=True)
+            print(f"\nTotal combined data points: {len(combined_df)}")
+            return combined_df
         else:
+            print("No data was processed.")
             return pd.DataFrame()
