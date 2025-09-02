@@ -3,76 +3,98 @@ from pathlib import Path
 
 
 class PpsTextFileProcessor:
+    """
+    Processes a PPS text file and converts a specific data section into a pandas DataFrame.
+    The file is expected to have a 'DEPLOYMENT DATA' section with a specific 3-line format per event.
+    """
 
     def __init__(self, pps_txt_file: str, sites: list):
-
         self.pps_txt_file = Path(pps_txt_file)
         # The list of sites applicable to project. Will pull out of file name and add to df
         self.sites = sites
 
     def convert_pps_txt_to_df(self):
-
-        with open(self.pps_txt_file, 'r') as file:
+        """
+        Parses the PPS text file to extract 'DEPLOYMENT DATA' and converts it into a pandas DataFrame.
+        This method is more robust than the original and handles inconsistent file headers.
+        """
+        with open(self.pps_txt_file, 'r', encoding='utf-8') as file:
             lines = file.readlines()
 
-            start_idx = None
-            end_idx = None
-            for i, line in enumerate(lines):
-                if "DEPLOYMENT DATA" in line:
-                    # find first row of data (6 lines after DEPLOYMENT DATA)
-                    start_idx = i + 6
-                if "PUMPING DATA" in line:
-                    end_idx = i - 4
+        events = []
+        data_section_started = False
+        data_lines_buffer = []
 
-            data_lines = []
-            for line in lines[start_idx:end_idx]:
-                line = line.strip()
-                if not line.strip().startswith('|') and line.strip():  # ignore empty lines
-                    data_lines.append(line)
+        # First pass: identify and collect only the relevant data lines
+        for line in lines:
+            line_stripped = line.strip()
 
-            # Parse data in 3 lines per event
-            events = []
-            for i in range(0, len(data_lines), 3):
-                if i + 2 >= len(data_lines):  # Make sure we have all 3 lines
-                    break
+            if "DEPLOYMENT DATA" in line_stripped:
+                # Found the start of the data section
+                data_section_started = True
+                continue
 
-                # Get all three lines for this event
-                sample_line = data_lines[i + 1].strip()
-                fixative_flush_line = data_lines[i + 2].strip()
+            if "PUMPING DATA" in line_stripped:
+                # Found the end of the section, stop processing
+                break
 
-                try:
-                    # Parse each line
-                    sample_parts = [part.strip()
-                                    for part in sample_line.split('|')]
-                    fixative_flush_parts = [part.strip()
-                                            for part in fixative_flush_line.split('|')]
+            if data_section_started:
+                # Ignore header, blank, and separator lines
+                if line_stripped and not line_stripped.startswith(('Event', '|', 'Number')):
+                    # The data lines seem to have a leading space, strip it
+                    clean_line = line.lstrip(' ')
+                    data_lines_buffer.append(clean_line)
+        
+        # Second pass: parse the collected data lines
+        # The data is structured in blocks of 3 lines per event.
+        # However, there are blank lines in between, so we need to filter them out.
+        clean_data_lines = [line.strip() for line in data_lines_buffer if line.strip()]
 
-                    # Extract the data I want
+        for i in range(0, len(clean_data_lines), 3):
+            if i + 2 >= len(clean_data_lines):
+                break # Ensure a complete 3-line event block is available
+
+            sample_line = clean_data_lines[i+1]
+            fixative_flush_line = clean_data_lines[i+2]
+            
+            try:
+                # The data is separated by pipes, so we split and then clean up empty strings
+                sample_parts = [part.strip() for part in sample_line.split('|') if part.strip()]
+                fixative_flush_parts = [part.strip() for part in fixative_flush_line.split('|') if part.strip()]
+                
+                # We need to check if the lists have the expected number of elements before accessing them
+                if len(sample_parts) >= 6 and len(fixative_flush_parts) >= 6:
                     event_number = int(sample_parts[0])
                     sample_vol_pumped = int(sample_parts[5])
-                    sample_duration = int(sample_parts[6])
-                    sample_start_date = sample_parts[2]
+                    sample_duration = int(sample_parts[6]) # This is actually column 7
                     fixative_flush_vol_pumped = int(fixative_flush_parts[5])
 
-                    # create event_record
+                    # Create a record for this event
                     event_record = {
                         'event_number': event_number,
                         'sample_vol_pumped': sample_vol_pumped,
                         'sample_duration': sample_duration,
-                        'sample_start_date': sample_start_date,
+                        'sample_start_date': sample_parts[2],
                         'fixative_flush_vol_pumped': fixative_flush_vol_pumped
                     }
-
                     events.append(event_record)
+                else:
+                    # Log a warning if a line doesn't have the expected structure
+                    print(f"Warning: Skipping malformed data lines starting at index {i} in the clean data buffer.")
+            
+            except (ValueError, IndexError) as e:
+                # The try-except block is important for catching parsing errors
+                print(f"Error parsing event starting at line group {i+1} in the clean data buffer: {e}")
+                print(f"Problematic lines: \n1: {clean_data_lines[i]}\n2: {sample_line}\n3: {fixative_flush_line}")
+                continue # Skip to the next event group
 
-                except (ValueError, IndexError) as e:
-                    print(f"Error parsing event starting at line {i}: {e}")
+        # Create the final DataFrame from the list of events
+        df = pd.DataFrame(events)
 
-            df = pd.DataFrame(events)
+        # Add station_id if a match is found in the filename
+        for site in self.sites:
+            if site in self.pps_txt_file.name:
+                df['station_id'] = site
+                break  # Exit loop once a match is found
 
-            # Add station_id to df
-            for site in self.sites:
-                if site in self.pps_txt_file.name:
-                    df['station_id'] = site
-
-            return df
+        return df
