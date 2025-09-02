@@ -54,14 +54,14 @@ class PpsTextFileProcessor:
             if i + 2 >= len(clean_data_lines):
                 break # Ensure a complete 3-line event block is available
 
-            sample_line = clean_data_lines[i+1]
-            fixative_flush_line = clean_data_lines[i+2]
+            sample_line = clean_data_lines[i+2]
+            fixative_flush_line = clean_data_lines[i+3]
             
             try:
                 # The data is separated by pipes, so we split and then clean up empty strings
                 sample_parts = [part.strip() for part in sample_line.split('|') if part.strip()]
                 fixative_flush_parts = [part.strip() for part in fixative_flush_line.split('|') if part.strip()]
-                
+
                 # We need to check if the lists have the expected number of elements before accessing them
                 if len(sample_parts) >= 6 and len(fixative_flush_parts) >= 6:
                     event_number = int(sample_parts[0])
@@ -90,6 +90,9 @@ class PpsTextFileProcessor:
 
         # Create the final DataFrame from the list of events
         df = pd.DataFrame(events)
+
+        # Make sample_start_date a datetime object
+        df['sample_start_date'] = pd.to_datetime(df['sample_start_date'], format='%m/%d/%Y %H:%M:%S')
 
         # Add station_id if a match is found in the filename
         for site in self.sites:

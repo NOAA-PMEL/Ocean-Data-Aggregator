@@ -12,6 +12,8 @@ class Aggregator:
 
         self.config_file = self.load_config(config_yaml)
         self.quagmire_site_col_name = self.config_file['quagmire_info']['station_site_col_name']
+        self.pps_date_col = 'pps_sample_start_date' # the date column of the PPS df (this is created in the PpsTextFileProcessor)
+        self.pps_station_id_col = 'pps_station_id' # The name of the station_id col in the pps data (create in the PpstextFileProcessor)
         # needs to be optional
         self.pps_txt_file_dir = Path(
             self.config_file['pps_data']['pps_txt_files_dir'])
@@ -41,4 +43,8 @@ class Aggregator:
             pps_df = pps_processor.convert_pps_txt_to_df()
             pps_dfs.append(pps_df)
 
-        return pd.concat(pps_dfs, ignore_index=True)
+        df = pd.concat(pps_dfs, ignore_index=True)
+
+        df = df.add_prefix('pps_')
+
+        return df

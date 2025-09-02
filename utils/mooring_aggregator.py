@@ -22,6 +22,11 @@ class MooringAggregator(Aggregator):
         self.ocean_model_depth_var = self.config_file['ocean_model_data']['depth_variable_name']
         self.ocean_model_vert_dim_name = self.config_file['ocean_model_data']['vertical_dim_name']
         self.ocean_model_time_dim_name = self.config_file['ocean_model_data']['time_dim_name']
+        self.mooring_measurement_date_col = 'moor_measurement_datetime' # the name of the date column in the mooring data - creatd in the matFileProcessor
+        self.mooring_station_id_col = 'moor_station_id' # the name of the station_id col in the mooring data
+        self.ctd_from_netcdf_station_id_col = 'ctd_station_id' # From the netcdfProcessor
+        self.ctd_from_netcdf_date_col = 'ctd_time' # fromt he netcdfProcessor
+
 
         # Deduced
         self.min_date, self.max_date = self.get_quag_min_and_max_dates()
@@ -72,7 +77,9 @@ class MooringAggregator(Aggregator):
             mooring_df = mat_processor.process_mat_data_like_ocnms()
             mooring_dfs.append(mooring_df)
 
-        return pd.concat(mooring_dfs, ignore_index=True)
+        df = pd.concat(mooring_dfs, ignore_index=True)
+        df = df.add_prefix('moor_')
+        return df
 
     def convert_ctd_nc_files_to_df(self) -> pd.DataFrame:
         """
@@ -93,7 +100,9 @@ class MooringAggregator(Aggregator):
             nc_df = nc_processor.convert_ctd_nc_to_df()
             nc_dfs.append(nc_df)
 
-        return pd.concat(nc_dfs, ignore_index=True)
+        df = pd.concat(nc_dfs, ignore_index=True)
+        df = df.add_prefix('ctd_')
+        return df
 
     def convert_ocean_model_nc_to_df(self) -> pd.DataFrame:
 
@@ -109,4 +118,71 @@ class MooringAggregator(Aggregator):
                                                                end_time=self.max_date)
             nc_dfs.append(nc_df)
 
-        return pd.concat(nc_dfs, ignore_index=True)
+        df = pd.concat(nc_dfs, ignore_index=True)
+        df.add_prefix('model_')
+        return df
+
+
+    def merge_asof_by_station_and_date(self,
+        left_df: pd.DataFrame, 
+        right_df: pd.DataFrame, 
+        left_date_col: str, 
+        right_date_col: str, 
+        left_station_id_col: str, 
+        right_station_id_col: str, 
+        tolerance: pd.Timedelta = None # like pd.Timedelta('1h')
+    ) -> pd.DataFrame:
+
+        """
+        1st step: merge ctd with pps (PPS data is left hand side) by date and station_id. Merge by getting closest date in CTD data to PPS data.
+        Grouped by station_id
+        """
+         # clean - drop na
+        left_df_clean = left_df.dropna(subset=[left_station_id_col, left_date_col])
+        rigt_df_clean = right_df.dropna(subset=[right_station_id_col, right_date_col])
+        
+        # sort
+        left_sorted = left_df_clean.sort_values([left_station_id_col, left_date_col]).reset_index(drop=True)
+        right_sorted = rigt_df_clean.sort_values([right_station_id_col, right_date_col]).reset_index(drop=True)
+
+        # Ensure in datetime
+        left_sorted[left_date_col] = pd.to_datetime(left_sorted[left_date_col])
+        right_sorted[right_date_col] = pd.to_datetime(right_sorted[right_date_col])
+
+        merged_list = []
+        for station_id in left_sorted[left_station_id_col].unique():
+            left_subset =left_sorted[left_sorted[left_station_id_col] == station_id]
+            right_subset = right_sorted[right_sorted[right_station_id_col] == station_id]
+            
+            # Subsets are already sorted but re-sorting is a good practice for robustness
+            left_subset = left_subset.sort_values(left_date_col)
+            right_subset = right_subset.sort_values(right_date_col)
+            
+            merged_df = pd.merge_asof(
+                left_subset,
+                right_subset,
+                left_on=left_date_col,
+                right_on=right_date_col,
+                direction='nearest',
+                tolerance=tolerance # default None to just find closest date
+            )
+            merged_list.append(merged_df)
+            
+        merged_df = pd.concat(merged_list, ignore_index=True)
+
+        return merged_df
+    
+    def merge_ctd_with_pps(self):
+        
+        pps_ctd_df = self.merge_asof_by_station_and_date(
+            left_df=self.pps_df,
+            right_df=self.ctd_from_netcdf_df,
+            left_date_col=self.pps_date_col,
+            right_date_col=self.ctd_from_netcdf_date_col,
+            left_station_id_col=self.pps_station_id_col,
+            right_station_id_col=self.ctd_from_netcdf_station_id_col
+        )
+
+        return pps_ctd_df
+    
+    
