@@ -63,46 +63,17 @@ class CnvProcessor:
 
                     # Convert to ISO format
                     dt = datetime.strptime(start_time, '%b %d %Y %H:%M:%S')
-                    break
-
-        # Check the local time equals UTC time which means its in UTC time
-        utc_time = self.check_time_zone()
-        if utc_time == True:
-            return dt
-    
-    def check_time_zone(self):
-        """
-        Check the time zone. Checks that the localtime mattches the utc time and if so assumes utc time
-        * System UpLoad Time = Jun 23 2022 18:53:58 (localtime) = Jun 23 2022 18:53:58 (UTC)
-        """
-        try: # try checking the 'System UpLoad Time = ' line in header first (from OCNMS .cnv files)
-            with open(self.cnv_file, 'r') as cnv_file:
-                for line in cnv_file:
-                    if line.startswith('* System UpLoad Time'):
-                        parts = line.split('=')
-                        for part in parts:
-                            if '(localtime)' in part:
-                                local_time = part.split(' (')[0]
-                            if '(UTC)' in part:
-                                utc_time = part.split(' (')[0]
-
-                        if local_time == utc_time:
-                            return True
-                        else:
-                            return False
-        except:
-            raise ValueError(f"Uhoh trouble checking what the time zone is - check how this is given in the .cnv file for {self.cnv_file}")
+                    return dt
+                    
                     
     def get_collection_dates_from_julian_days(self, cnv_df: pd.DataFrame) -> pd.DataFrame:
         """
-        If the df has a column called timeJ_Julian_Days, this uses the start_time to calculate the actual collection date
+        If the df has a column called timeJ_Julian_Days calculate the time stamps because its absolute (Julian days = number of days stince January 1 of the start of the year)
         """
-        start_dt = pd.to_datetime(self.start_time)
-
         try:
-            cnv_df['collection_date'] = start_dt + pd.to_timedelta(cnv_df['timeJ_Julian_Days'], unit='days')
-        except KeyError:
-            print("No 'Julian_Days' column found in the cnv_df so collection_date can not be calculated from Julian_Days")
+            cnv_df['time'] = pd.to_datetime(cnv_df['timeJ_Julian_Days'], unit='D', origin= f'{self.start_time.year}-01-01')
+        except KeyError as e:
+            raise KeyError(f"No 'timeJ_Julian_Days' column found in the cnv_df: {e}")
 
         return cnv_df
                     
