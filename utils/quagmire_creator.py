@@ -41,7 +41,11 @@ class QuagmireCreator:
         self.mr_df[self.new_timezone_col] = self.mr_df.apply(lambda row: self.get_the_timzone_by_lat_lon(
             lat=row[self.new_lat_dec_deg_col], lon=row[self.new_lon_dec_deg_col]), axis=1)
 
-        # Check if both local time and local date are filled out for entire df
+
+        ### THIS BLOCK OF CODE check to see if all the local time and local dates are filled out and if they are, then creates a combined_local_date
+        # column, it then checksi fall the utc date and utc time columns are empty, and if they are then calculates the combined_utc_date/time from
+        # the local date
+        # May need to rework logic if for some reason, some rows would have local date and some would have utc date. 
         if not self.mr_df[self.local_date_col].isnull().any() and not self.mr_df[self.local_time_col].isnull().any():
             # create a local_date_combined_col
             self.mr_df[self.new_local_date_combo_col] = self.mr_df.apply(lambda row: self.combine_dates_and_times(
