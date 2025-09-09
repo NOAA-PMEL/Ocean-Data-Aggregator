@@ -43,7 +43,7 @@ class QuagmireCreator:
 
 
         ### THIS BLOCK OF CODE check to see if all the local time and local dates are filled out and if they are, then creates a combined_local_date
-        # column, it then checksi fall the utc date and utc time columns are empty, and if they are then calculates the combined_utc_date/time from
+        # column, it then checks fall the utc date OR the utc time columns are empty, and if tone of them is empty, it calculates the combined_utc_date/time from
         # the local date
         # May need to rework logic if for some reason, some rows would have local date and some would have utc date. 
         if not self.mr_df[self.local_date_col].isnull().any() and not self.mr_df[self.local_time_col].isnull().any():
@@ -51,12 +51,10 @@ class QuagmireCreator:
             self.mr_df[self.new_local_date_combo_col] = self.mr_df.apply(lambda row: self.combine_dates_and_times(
                 date=row[self.local_date_col], time=row[self.local_time_col]), axis=1)
         
-            # If UTC time and UTC date is empty for all rows, use local time/date to get UCT time:
-            if self.mr_df[self.utc_time_col].isnull().all() and self.mr_df[self.utc_date_col].isnull().all():
+            # If UTC time or UTC date is empty for all rows, use local time/date to get UCT time:
+            if self.mr_df[self.utc_time_col].isnull().all() or self.mr_df[self.utc_date_col].isnull().all():
                 self.mr_df[self.new_utc_date_combo_col] = self.mr_df.apply(lambda row: self.convert_local_time_to_utc(
                     local_date_time_combined=row[self.new_local_date_combo_col], timezone=row[self.new_timezone_col]), axis=1)
-
-
 
     def convert_lat_lon_coords(self):
         """
