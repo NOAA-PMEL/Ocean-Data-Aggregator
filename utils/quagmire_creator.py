@@ -14,15 +14,21 @@ class QuagmireCreator:
         self.mr_df = pd.read_csv(machine_readable_file)
         self.mr_og_lat_col = 'Lat'
         self.mr_og_lon_col = 'Lon'
-        self.new_lat_dec_deg_col = 'Lat_dec'
-        self.new_lon_dec_deg_col = 'Lon_dec'
         self.local_time_col = 'Collection_Time_local'
         self.local_date_col = 'Collection_Date_local'
-        self.new_local_date_combo_col = "local_date_combined"
         self.utc_time_col = 'Collection_Time_UTC'
         self.utc_date_col = 'Collection_Date_UTC'
-        self.new_utc_date_combo_col = "utc_date_combined"
+        self.station_col = 'Station'
+        self.cast_col = 'Cast'
+        self.bottle_col = 'Bottle'
+        
+        
+        # New columns created in this class
         self.new_timezone_col = 'local_timezone'
+        self.new_utc_date_combo_col = 'utc_date_combined'
+        self.new_local_date_combo_col = "local_date_combined"
+        self.new_lat_dec_deg_col = 'Lat_dec'
+        self.new_lon_dec_deg_col = 'Lon_dec'
 
     def process_mr_file(self) -> pd.DataFrame:
         
@@ -44,17 +50,27 @@ class QuagmireCreator:
 
         ### THIS BLOCK OF CODE check to see if all the local time and local dates are filled out and if they are, then creates a combined_local_date
         # column, it then checks fall the utc date OR the utc time columns are empty, and if tone of them is empty, it calculates the combined_utc_date/time from
-        # the local date
-        # May need to rework logic if for some reason, some rows would have local date and some would have utc date. 
+        # the local date. This overrides any UTC date/times that already exist in the mr_df with the calculated from the local. Not sure if for some reason this
+        # wouldn't be okay? 
         if not self.mr_df[self.local_date_col].isnull().any() and not self.mr_df[self.local_time_col].isnull().any():
             # create a local_date_combined_col
             self.mr_df[self.new_local_date_combo_col] = self.mr_df.apply(lambda row: self.combine_dates_and_times(
-                date=row[self.local_date_col], time=row[self.local_time_col]), axis=1)
+                date=row[self.local_date_col], 
+                time=row[self.local_time_col]), 
+                axis=1)
         
             # If UTC time or UTC date is empty for all rows, use local time/date to get UCT time:
             if self.mr_df[self.utc_time_col].isnull().all() or self.mr_df[self.utc_date_col].isnull().all():
-                self.mr_df[self.new_utc_date_combo_col] = self.mr_df.apply(lambda row: self.convert_local_time_to_utc(
-                    local_date_time_combined=row[self.new_local_date_combo_col], timezone=row[self.new_timezone_col]), axis=1)
+                # Get a series of tuples
+                results = self.mr_df.apply(
+                    lambda row: self.convert_local_time_to_utc(
+                    local_date_time_combined=row[self.new_local_date_combo_col], 
+                    timezone=row[self.new_timezone_col]), 
+                    axis=1)
+                # Assign each element of the tuple to the correct column
+                self.mr_df[self.new_utc_date_combo_col] = results.str.get(0)
+                self.mr_df[self.utc_date_col] = results.str.get(1)
+                self.mr_df[self.utc_time_col] = results.str.get(2)
 
     def convert_lat_lon_coords(self):
         """
@@ -113,7 +129,7 @@ class QuagmireCreator:
 
     def convert_local_time_to_utc(self, local_date_time_combined: str, timezone: str):
         """
-        Converts a local datetime to utc time
+        Converts a local datetime to utc time and returns the 1) combined date/time, 2) just the date, 3) just the time.
         """
         local_tz = pytz.timezone(timezone)
         local_dt_naive = datetime.fromisoformat(local_date_time_combined)
@@ -122,8 +138,13 @@ class QuagmireCreator:
         local_dt_aware = local_dt_naive.replace(tzinfo=local_tz)
 
         # Convert the localized datetime to UTC
-        utc_dt = str(local_dt_aware.astimezone(ZoneInfo('UTC')))
-        utc_dt_obj = datetime.fromisoformat(utc_dt)
-        iso_format_with_Z = utc_dt_obj.strftime('%Y-%m-%dT%H:%M:%SZ')
+        utc_dt_aware = local_dt_aware.astimezone(ZoneInfo('UTC'))
 
-        return iso_format_with_Z
+        # The Full ISO date/time
+        iso_format_with_Z = utc_dt_aware.strftime('%Y-%m-%dT%H:%M:%SZ')
+
+        # The UTC date and the UTC time
+        utc_date = utc_dt_aware.date()
+        utc_time = utc_dt_aware.time()
+
+        return iso_format_with_Z, utc_date, utc_time
