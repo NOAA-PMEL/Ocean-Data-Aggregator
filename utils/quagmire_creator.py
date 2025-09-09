@@ -9,7 +9,7 @@ class QuagmireCreator:
     """
     Creates the QAQC file from the MachineReadable File. Edits things like dates and longitude and latitude
     """
-    def __init__(self, machine_readable_file: str):
+    def __init__(self, machine_readable_file: str, station_col: str):
 
         # Existing column names in Machine Readable file
         self.mr_og_lat_col = 'Lat'
@@ -18,7 +18,7 @@ class QuagmireCreator:
         self.local_date_col = 'Collection_Date_local'
         self.utc_time_col = 'Collection_Time_UTC'
         self.utc_date_col = 'Collection_Date_UTC'
-        self.station_col = 'Station'
+        self.station_col = station_col
         self.cast_col = 'Cast'
         self.rosette_pos_col = 'Rosette_position'
         self.depth_col = 'Depth_m'

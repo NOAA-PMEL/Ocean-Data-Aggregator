@@ -28,7 +28,7 @@ class MooringAggregator(Aggregator):
         
         # For CTD data derived (can be .NC or .CNV)
         self.ctd_station_col = 'ctd_station_id' # From the netcdfProcessor and/or cnvProcessor (must be the same)
-        self.ctd_date_col = 'ctd_time' # fromt he netcdfProcessor and/or cnvProcessor (must be the same)
+        self.ctd_date_col = 'ctd_time' # from the netcdfProcessor and/or cnvProcessor (must be the same)
         if self.config_file['ctd_data'].get('net_cdf_dir', None):
             self.ctd_nc_file_directory = Path(self.config_file['ctd_data']['net_cdf_dir'])
             self.ctd_df = self.convert_ctd_nc_files_to_df()

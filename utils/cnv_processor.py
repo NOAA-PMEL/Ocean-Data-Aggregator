@@ -27,6 +27,9 @@ class CnvProcessor:
         # Add the site
         df_site_updated = self.get_site(cnv_df=df_dates_updated)
 
+        df_site_updated['time_elapsed'] = df['time'].diff()
+        unique_dates = df_site_updated['time'].dt.date.unique()
+
         return df_site_updated 
     
     def get_units_from_cnv_file(self) -> dict:
@@ -46,9 +49,6 @@ class CnvProcessor:
                         new_col_name = f"{og_col}_{parts[2].strip()}"
                     units_dict[og_col] = new_col_name.replace(' ', '_').replace('\n', '')
         
-    
-                    
-
         return units_dict
     
     def get_the_start_time(self):
