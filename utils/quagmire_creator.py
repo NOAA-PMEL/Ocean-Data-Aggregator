@@ -9,7 +9,7 @@ class QuagmireCreator:
     """
     Creates the QAQC file from the MachineReadable File. Edits things like dates and longitude and latitude
     """
-    def __init__(self, machine_readable_file: str, station_col: str):
+    def __init__(self, machine_readable_files: list, station_col: str):
 
         # Existing column names in Machine Readable file
         self.mr_og_lat_col = 'Lat'
@@ -30,7 +30,7 @@ class QuagmireCreator:
         self.new_lat_dec_deg_col = 'Lat_dec'
         self.new_lon_dec_deg_col = 'Lon_dec'
         
-        self.machine_readable_file = machine_readable_file
+        self.machine_readable_files = machine_readable_files
         self.quagmire_df = self.process_mr_file()
         self.quag_min_date, self.quag_max_date = self.get_quag_min_and_max_dates()
         self.quag_min_depth, self.quag_max_depth = self.get_quag_min_and_max_depths()
@@ -38,7 +38,12 @@ class QuagmireCreator:
 
     def process_mr_file(self) -> pd.DataFrame:
 
-        mr_df = pd.read_csv(self.machine_readable_file)
+        # Append all machine readable dfs together
+        mr_dfs = []
+        for file in self.machine_readable_files:
+            df = pd.read_csv(file)
+            mr_dfs.append(df)
+        mr_df = pd.concat(mr_dfs, ignore_index=True)
         
         # get lat/lon in decimal degrees
         mr_df_lat_lon_updated = self.convert_lat_lon_coords(mr_df=mr_df)

@@ -1,7 +1,15 @@
 # Machine Readable File information - this is used to make the QAQC (AKA the Quagmire)
 machine_readable_info:
-  machine_readable_file: /Users/zalmanek/Documents/OCNMS_data_organized/ocnms_data/2023_Jun_OCNMS_TH042/machineReadableFixed_OC0623.csv
-  station_col: 'Cast_No.' # Must match what's in the ctd_data (This seems to vary - Station would be normal, but someimtes for Mooring/PPS it varies)
+  machine_readable_files: 
+    - /Users/zalmanek/Documents/OCNMS_data_organized/CTD_data/2021_Aug_OCNMS_TH042/machineReadableFixed_OC0821.csv
+    - /Users/zalmanek/Documents/OCNMS_data_organized/CTD_data/2021_Oct_OCNMS_TH042/machineReadableFixed_OC1021.csv
+    - /Users/zalmanek/Documents/OCNMS_data_organized/CTD_data/2022_Aug_OCNMS_TH042/machineReadableFixed_OC0822.csv
+    - /Users/zalmanek/Documents/OCNMS_data_organized/CTD_data/2022_July_OCNMS_TH042/machineReadableFixed_OC0722.csv
+    - /Users/zalmanek/Documents/OCNMS_data_organized/CTD_data/2022_Jun_OCNMS_TH042/machineReadableFixed_OC0622.csv
+    - /Users/zalmanek/Documents/OCNMS_data_organized/CTD_data/2022_Sept_OCNMS_TH042/machineReadableFixed_OC0922.csv
+    - /Users/zalmanek/Documents/OCNMS_data_organized/CTD_data/2023_July_OCNMS_TH042/machineReadableFixed_OC0723.csv
+    - /Users/zalmanek/Documents/OCNMS_data_organized/CTD_data/2023_Jun_OCNMS_TH042/machineReadableFixed_OC0623.csv
+  station_col: 'Cast_No.' # Must match what's in the ctd_data (This seems to vary - Station would be normal, but someimtes for Mooring/PPS it varies). Must be teh same for all the machine readable files
 
 # Mooring data 
 mooring_mat_files: # Takes a list of .mat files (in case we want to aggregate a bunch together. Right now doing OCNMS 2021-2023)
@@ -10,7 +18,7 @@ mooring_mat_files: # Takes a list of .mat files (in case we want to aggregate a 
 # NetCDF or .CNV info (AKA the CTD data) The directory where all the net cdf files live with the station_ids in the folder names and file names
 ctd_data:
   # net_cdf_dir: /Users/zalmanek/Development/PMEL-OME-OCNMS/Ella_combined_20250530/OCNMS_ctd_data_Ella/data/Olympic_Coast_National_Marine_Sanctuary_CTD_Data_2005_2023/netcdf_files/binned_profiles
-  cnv_dir: /Users/zalmanek/Documents/OCNMS_data_organized/ocnms_data/2023_Jun_OCNMS_TH042/
+  cnv_dir: /Users/zalmanek/Documents/OCNMS_data_organized/CTD_data/
 
 # # A list of all the applicable PPS txt files
 # pps_data:

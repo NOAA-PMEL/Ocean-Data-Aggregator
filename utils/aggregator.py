@@ -17,7 +17,7 @@ class Aggregator:
         # self.quagmire_pps_port_col_name = self.config_file['quagmire_info']['self.pps_port_col_name']
 
         # quagmire updated
-        self.quagmire_creator = QuagmireCreator(machine_readable_file=self.config_file['machine_readable_info']['machine_readable_file'],
+        self.quagmire_creator = QuagmireCreator(machine_readable_files=self.config_file['machine_readable_info']['machine_readable_files'],
                                                 station_col=self.config_file['machine_readable_info']['station_col'])
         self.quagmire_df = self.quagmire_creator.quagmire_df
         self.quag_utc_date_time_col = self.quagmire_creator.new_utc_date_combo_col
@@ -28,9 +28,6 @@ class Aggregator:
         self.quag_site_col_name = self.quagmire_creator.station_col
         self.quag_station_sites = self.quagmire_creator.quag_station_sites
         self.quag_rosette_pos_col = self.quagmire_creator.rosette_pos_col
-
-        # Machine readable
-        self.mr_file = self.config_file['machine_readable_info']['machine_readable_file']
         
         # pps info
         # self.pps_date_col = 'pps_sample_start_date' # the date column of the PPS df (this is created in the PpsTextFileProcessor)
