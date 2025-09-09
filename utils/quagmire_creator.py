@@ -10,8 +10,8 @@ class QuagmireCreator:
     Creates the QAQC file from the MachineReadable File. Edits things like dates and longitude and latitude
     """
     def __init__(self, machine_readable_file: str):
-        
-        self.mr_df = pd.read_csv(machine_readable_file)
+
+        # Existing column names in Machine Readable file
         self.mr_og_lat_col = 'Lat'
         self.mr_og_lon_col = 'Lon'
         self.local_time_col = 'Collection_Time_local'
@@ -20,8 +20,8 @@ class QuagmireCreator:
         self.utc_date_col = 'Collection_Date_UTC'
         self.station_col = 'Station'
         self.cast_col = 'Cast'
-        self.bottle_col = 'Bottle'
-        
+        self.rosette_pos_col = 'Rosette_position'
+        self.depth_col = 'Depth_m'
         
         # New columns created in this class
         self.new_timezone_col = 'local_timezone'
@@ -29,22 +29,32 @@ class QuagmireCreator:
         self.new_local_date_combo_col = "local_date_combined"
         self.new_lat_dec_deg_col = 'Lat_dec'
         self.new_lon_dec_deg_col = 'Lon_dec'
+        
+        self.machine_readable_file = machine_readable_file
+        self.quagmire_df = self.process_mr_file()
+        self.quag_min_date, self.quag_max_date = self.get_quag_min_and_max_dates()
+        self.quag_min_depth, self.quag_max_depth = self.get_quag_min_and_max_depths()
+        self.quag_station_sites = self.quagmire_df[self.station_col].unique().tolist()
 
     def process_mr_file(self) -> pd.DataFrame:
+
+        mr_df = pd.read_csv(self.machine_readable_file)
         
         # get lat/lon in decimal degrees
-        self.convert_lat_lon_coords()
+        mr_df_lat_lon_updated = self.convert_lat_lon_coords(mr_df=mr_df)
     
         # Edit dates - calculating local time or UTC time, and adding combined date/time columns for both local and UTC
-        self.edit_dates()
+        mr_df_dates_updated = self.edit_dates(mr_df=mr_df_lat_lon_updated)
+
+        return mr_df_dates_updated
     
-    def edit_dates(self):
+    def edit_dates(self, mr_df: pd.DataFrame) -> pd.DataFrame:
         """
         Edit the dates in the Machine Readable df (mr_df) to update for local or UTC time, depending on what is missing
         """
 
         # Get timezone for each row
-        self.mr_df[self.new_timezone_col] = self.mr_df.apply(lambda row: self.get_the_timzone_by_lat_lon(
+        mr_df[self.new_timezone_col] = mr_df.apply(lambda row: self.get_the_timzone_by_lat_lon(
             lat=row[self.new_lat_dec_deg_col], lon=row[self.new_lon_dec_deg_col]), axis=1)
 
 
@@ -52,33 +62,36 @@ class QuagmireCreator:
         # column, it then checks fall the utc date OR the utc time columns are empty, and if tone of them is empty, it calculates the combined_utc_date/time from
         # the local date. This overrides any UTC date/times that already exist in the mr_df with the calculated from the local. Not sure if for some reason this
         # wouldn't be okay? 
-        if not self.mr_df[self.local_date_col].isnull().any() and not self.mr_df[self.local_time_col].isnull().any():
+        if not mr_df[self.local_date_col].isnull().any() and not mr_df[self.local_time_col].isnull().any():
             # create a local_date_combined_col
-            self.mr_df[self.new_local_date_combo_col] = self.mr_df.apply(lambda row: self.combine_dates_and_times(
+            mr_df[self.new_local_date_combo_col] = mr_df.apply(lambda row: self.combine_dates_and_times(
                 date=row[self.local_date_col], 
                 time=row[self.local_time_col]), 
                 axis=1)
         
             # If UTC time or UTC date is empty for all rows, use local time/date to get UCT time:
-            if self.mr_df[self.utc_time_col].isnull().all() or self.mr_df[self.utc_date_col].isnull().all():
+            if mr_df[self.utc_time_col].isnull().all() or mr_df[self.utc_date_col].isnull().all():
                 # Get a series of tuples
-                results = self.mr_df.apply(
+                results = mr_df.apply(
                     lambda row: self.convert_local_time_to_utc(
                     local_date_time_combined=row[self.new_local_date_combo_col], 
                     timezone=row[self.new_timezone_col]), 
                     axis=1)
                 # Assign each element of the tuple to the correct column
-                self.mr_df[self.new_utc_date_combo_col] = results.str.get(0)
-                self.mr_df[self.utc_date_col] = results.str.get(1)
-                self.mr_df[self.utc_time_col] = results.str.get(2)
+                mr_df[self.new_utc_date_combo_col] = results.str.get(0)
+                mr_df[self.utc_date_col] = results.str.get(1)
+                mr_df[self.utc_time_col] = results.str.get(2)
 
-    def convert_lat_lon_coords(self):
+        return mr_df
+
+    def convert_lat_lon_coords(self, mr_df: pd.DataFrame) -> pd.DataFrame:
         """
         Convert the latitude and longitude to decimal degrees. Right now only have function that will convert from this format 47˚ 52.467' N
         """
         try:
-            self.mr_df[self.new_lat_dec_deg_col] = self.mr_df[self.mr_og_lat_col].apply(self.get_coord_dec_degree_from_deg_min)
-            self.mr_df[self.new_lon_dec_deg_col] = self.mr_df[self.mr_og_lon_col].apply(self.get_coord_dec_degree_from_deg_min)
+            mr_df[self.new_lat_dec_deg_col] = mr_df[self.mr_og_lat_col].apply(self.get_coord_dec_degree_from_deg_min)
+            mr_df[self.new_lon_dec_deg_col] = mr_df[self.mr_og_lon_col].apply(self.get_coord_dec_degree_from_deg_min)
+            return mr_df
         except ValueError as e: # TODO: update to try other formats if doesn't work
             raise ValueError(e)
 
@@ -148,3 +161,30 @@ class QuagmireCreator:
         utc_time = utc_dt_aware.time()
 
         return iso_format_with_Z, utc_date, utc_time
+    
+    def get_quag_min_and_max_dates(self) -> tuple:
+        """
+        Get the min and max dates (UTC) from the Quagmire - to plug into ocean model data query or other possible reason
+        """
+        self.quagmire_df[self.utc_date_col] = pd.to_datetime(
+            self.quagmire_df[self.utc_date_col])
+
+        min_date = self.quagmire_df[self.utc_date_col].min()
+        max_date = self.quagmire_df[self.utc_date_col].max()
+
+        # Format the dates into YYYY-MM-DD and YYYY-MM strings
+        min_date_full_format = min_date.strftime('%Y-%m-%d')
+        max_date_full_format = max_date.strftime('%Y-%m-%d')
+
+        return min_date_full_format, max_date_full_format
+    
+    def get_quag_min_and_max_depths(self) -> tuple:
+        """
+        Get the min and max depths from the quagmire - to get range of depths or ocean model, or other reasons
+        """
+
+        # Get min and max depths from quagmire
+        min_depth = self.quagmire_df[self.depth_col].min()
+        max_depth = self.quagmire_df[self.depth_col].max()
+
+        return min_depth, max_depth
