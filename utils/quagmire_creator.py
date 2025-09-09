@@ -72,15 +72,14 @@ class QuagmireCreator:
             # If UTC time or UTC date is empty for all rows, use local time/date to get UCT time:
             if mr_df[self.utc_time_col].isnull().all() or mr_df[self.utc_date_col].isnull().all():
                 # Get a series of tuples
-                results = mr_df.apply(
+                mr_df[self.new_utc_date_combo_col] = mr_df.apply(
                     lambda row: self.convert_local_time_to_utc(
                     local_date_time_combined=row[self.new_local_date_combo_col], 
                     timezone=row[self.new_timezone_col]), 
                     axis=1)
-                # Assign each element of the tuple to the correct column
-                mr_df[self.new_utc_date_combo_col] = results.str.get(0)
-                mr_df[self.utc_date_col] = results.str.get(1)
-                mr_df[self.utc_time_col] = results.str.get(2)
+                
+                mr_df[self.utc_date_col] = mr_df[self.new_utc_date_combo_col].str.split('T').str[0]
+                mr_df[self.utc_time_col] = mr_df[self.new_utc_date_combo_col].str.split('T').str[1].str.replace('Z', '')
 
         return mr_df
 
@@ -148,19 +147,15 @@ class QuagmireCreator:
         local_dt_naive = datetime.fromisoformat(local_date_time_combined)
 
         # locallize the datetime object with the timezone found
-        local_dt_aware = local_dt_naive.replace(tzinfo=local_tz)
+        local_dt_aware = local_tz.localize(local_dt_naive)
 
         # Convert the localized datetime to UTC
-        utc_dt_aware = local_dt_aware.astimezone(ZoneInfo('UTC'))
+        utc_dt_aware = local_dt_aware.astimezone(pytz.utc)
 
         # The Full ISO date/time
         iso_format_with_Z = utc_dt_aware.strftime('%Y-%m-%dT%H:%M:%SZ')
 
-        # The UTC date and the UTC time
-        utc_date = utc_dt_aware.date()
-        utc_time = utc_dt_aware.time()
-
-        return iso_format_with_Z, utc_date, utc_time
+        return iso_format_with_Z
     
     def get_quag_min_and_max_dates(self) -> tuple:
         """

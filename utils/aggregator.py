@@ -25,7 +25,7 @@ class Aggregator:
         self.quag_max_date = self.quagmire_creator.quag_max_date
         self.quag_min_depth = self.quagmire_creator.quag_min_depth
         self.quag_max_depth = self.quagmire_creator.quag_max_depth
-        self.quag_sit_col_name = self.quagmire_creator.station_col
+        self.quag_site_col_name = self.quagmire_creator.station_col
         self.quag_station_sites = self.quagmire_creator.quag_station_sites
         self.quag_rosette_pos_col = self.quagmire_creator.rosette_pos_col
 

@@ -11,11 +11,13 @@ class CnvProcessor:
         self.cnv_file = cnv_file
         self.sites = sites
         self.start_time = self.get_the_start_time()
+        self.system_times = self.get_system_time()
         self.cnv_df = self.convert_cnv_to_df()
 
     def convert_cnv_to_df(self) -> pd.DataFrame:
 
         df = ctd.from_cnv(self.cnv_file)
+
         self.units_dict = self.get_units_from_cnv_file()
 
         # Change column names to include longer name and units
@@ -26,9 +28,6 @@ class CnvProcessor:
 
         # Add the site
         df_site_updated = self.get_site(cnv_df=df_dates_updated)
-
-        df_site_updated['time_elapsed'] = df['time'].diff()
-        unique_dates = df_site_updated['time'].dt.date.unique()
 
         return df_site_updated 
     
@@ -70,13 +69,40 @@ class CnvProcessor:
         """
         If the df has a column called timeJ_Julian_Days calculate the time stamps because its absolute (Julian days = number of days stince January 1 of the start of the year)
         """
-        try:
-            cnv_df['time'] = pd.to_datetime(cnv_df['timeJ_Julian_Days'], unit='D', origin= f'{self.start_time.year}-01-01')
-        except KeyError as e:
-            raise KeyError(f"No 'timeJ_Julian_Days' column found in the cnv_df: {e}")
+        # See if the system is in localtime or UTC time. # Checks if closest is UTC or if the localtime and UTC time are the same.
+        closest_time_to_start_time = min(self.system_times.keys(), key=lambda k: abs(self.system_times[k] - self.start_time))
+        if closest_time_to_start_time == 'UTC' or (self.system_times['localtime'] == self.system_times['UTC']):
+            try:
+                cnv_df['time'] = pd.to_datetime(cnv_df['timeJ_Julian_Days'], unit='D', origin= f'{self.start_time.year}-01-01').dt.tz_localize('UTC')
+            except KeyError as e:
+                raise KeyError(f"No 'timeJ_Julian_Days' column found in the cnv_df: {e}")
+        else:
+            raise ValueError(f"HAve not yet accounted for .cnv file to be in local time - please add functionality to get_collectiond_dates_from_julian_days")
 
         return cnv_df
-                    
+
+    def get_system_time(self) -> dict:
+        """
+        Gets the '* System UpLoad Time' line to return a dictionary like {'local_time': 'Jun 15 2023 09:23:07', 'UTC': 'Jun 15 2023 09:23:07'}"""
+        # Find out if times are in UTC or local (assumes a line in the .cnv like this '* System UpLoad Time = Jun 15 2023 09:23:07 (localtime) = Jun 15 2023 16:23:07 (UTC))'
+        # The pattern looks for three-letter month, day, year, hour, minute, and second (e.g. Jun 15 2023 09:23:07)
+        self.system_times = {}
+        pattern = r'(\w{3}\s+\d{1,2}\s+\d{4}\s+\d{2}:\d{2}:\d{2})'  
+        with open(self.cnv_file, 'r') as cnv_file:
+            for line in cnv_file:
+                if line.startswith('* System UpLoad Time'):
+                    line_parts = line.split('=')
+                    for part in line_parts:
+                        matches = re.findall(pattern, part)
+                        if matches:
+                            if 'localtime' in part:
+                                self.system_times['localtime'] = datetime.strptime(matches[0], '%b %d %Y %H:%M:%S')
+                            elif 'UTC' in part:
+                                self.system_times['UTC'] = datetime.strptime(matches[0], '%b %d %Y %H:%M:%S')
+                    break # break after it finds the '*System Upload Time' line
+
+        return self.system_times
+
     def get_site(self, cnv_df: pd.DataFrame) -> pd.DataFrame:
         """
         Add the site to the df

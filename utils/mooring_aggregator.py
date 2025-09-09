@@ -166,6 +166,10 @@ class MooringAggregator(Aggregator):
             
         merged_df = pd.concat(merged_list, ignore_index=True)
 
+        # Change date columns back to format we want:
+        merged_df[left_date_col] = merged_df[left_date_col].dt.strftime('%Y-%m-%dT%H:%M:%SZ')
+        merged_df[right_date_col] = merged_df[right_date_col].dt.strftime('%Y-%m-%dT%H:%M:%SZ')
+
         return merged_df
     
 
@@ -256,7 +260,7 @@ class MooringAggregator(Aggregator):
             right_df=self.pps_df,
             left_date_col=self.quag_utc_date_time_col,
             right_date_col=self.pps_date_col,
-            left_station_id_col=self.quag_sit_col_name,
+            left_station_id_col=self.quag_site_col_name,
             right_station_id_col=self.pps_station_id_col, 
             left_event_col=self.quag_rosette_pos_col,
             right_event_col=self.pps_event_col_name
@@ -272,13 +276,18 @@ class MooringAggregator(Aggregator):
             right_df=self.ctd_df,
             left_date_col=self.quag_utc_date_time_col,
             right_date_col=self.ctd_date_col,
-            left_station_id_col=self.quag_sit_col_name,
+            left_station_id_col=self.quag_site_col_name,
             right_station_id_col=self.ctd_station_col
         )
 
         quag_ctd_df[self.quag_utc_date_time_col] = pd.to_datetime(quag_ctd_df[self.quag_utc_date_time_col])
         quag_ctd_df[self.ctd_date_col] = pd.to_datetime(quag_ctd_df[self.ctd_date_col])
-        quag_ctd_df['time_difference'] = quag_ctd_df[self.ctd_date_col] - quag_ctd_df[self.quag_utc_date_time_col]
+        quag_ctd_df['ctd_quag_time_difference'] = quag_ctd_df[self.ctd_date_col] - quag_ctd_df[self.quag_utc_date_time_col]
+
+        # Change date col formats back
+        quag_ctd_df[self.quag_utc_date_time_col] = quag_ctd_df[self.quag_utc_date_time_col].dt.strftime('%Y-%m-%dT%H:%M:%SZ')
+        quag_ctd_df[self.ctd_date_col] = quag_ctd_df[self.ctd_date_col].dt.strftime('%Y-%m-%dT%H:%M:%SZ')
+        
         quag_ctd_df.to_csv('quag_ctd_cnv_merge.csv', index=False)
 
         return quag_ctd_df
