@@ -5,7 +5,7 @@ from utils.cnv_processor import CnvProcessor
 from pathlib import Path
 import pandas as pd
 
-# TODO: upate hardcoded sites in the convert_mat_files_to_dfs to not be hardcoded (take from Quagmire sites)
+# TODO: update the merge_ctd_with_quag function to have a tolerance of '1H' (check with Zack) after running the OCNMS code (needs to be adjustable for the code)
 
 
 class MooringAggregator(Aggregator):
@@ -21,14 +21,16 @@ class MooringAggregator(Aggregator):
         # self.ocean_model_df = self.convert_ocean_model_nc_to_df()
         
         # For Mooring data derived from .mat files
-        self.mooring_mat_files = self.config_file['mooring_mat_files']
+        self.mooring_mat_dir = Path(self.config_file['mooring_info']['mooring_data_dir'])
+        self.moor_time_zone = self.config_file['mooring_info']['mooring_data_timezone']
         self.mooring_measurement_date_col = 'moor_measurement_datetime' # the name of the date column in the mooring data - creatd in the matFileProcessor
         self.mooring_station_id_col = 'moor_station_id' # the name of the station_id col in the mooring data
-        # self.mooring_df = self.convert_mat_files_to_df()
+        self.mooring_df = self.convert_mat_files_to_df()
         
         # For CTD data derived (can be .NC or .CNV)
         self.ctd_station_col = 'ctd_station_id' # From the netcdfProcessor and/or cnvProcessor (must be the same)
         self.ctd_date_col = 'ctd_time' # from the netcdfProcessor and/or cnvProcessor (must be the same)
+        self.ctd_quag_merge_tolerance = self.config_file['ctd_data'].get('ctd_quag_merge_tolerance', None)
         if self.config_file['ctd_data'].get('net_cdf_dir', None):
             self.ctd_nc_file_directory = Path(self.config_file['ctd_data']['net_cdf_dir'])
             self.ctd_df = self.convert_ctd_nc_files_to_df()
@@ -43,8 +45,9 @@ class MooringAggregator(Aggregator):
         data frame (concats all .mat dfs together)
         """
 
+        all_mat_files = list(self.mooring_mat_dir.rglob('*.mat'))
         mooring_dfs = []
-        for mat_file in self.mooring_mat_files:
+        for mat_file in all_mat_files:
             mat_processor = MatFileProcessor(
                 sites=self.quag_station_sites, mat_file=mat_file)
 
@@ -52,9 +55,26 @@ class MooringAggregator(Aggregator):
             mooring_dfs.append(mooring_df)
 
         df = pd.concat(mooring_dfs, ignore_index=True)
-        df = df.add_prefix('moor_')
-        return df
 
+        df = df.add_prefix('moor_')
+
+        # Convert timezones to UTC for datetime columsn
+        updated_dates_df = self.update_moor_timezone_to_utc(df=df, column_names=['moor_deployment_time', self.mooring_measurement_date_col])
+        updated_dates_df.to_csv('mat.csv', index=False)
+        return updated_dates_df
+
+    def update_moor_timezone_to_utc(self, df: pd.DataFrame, column_names: list) -> pd.DataFrame:
+        """
+        Update the timezone fo the mooring file datetime columns to UTC.
+        """
+        for col in column_names:
+            df[col] = pd.to_datetime(df[col])
+            df[col] = df[col].dt.tz_localize(self.moor_time_zone)
+            df[col] = df[col].dt.tz_convert('UTC')
+            df[col] = df[col].dt.strftime('%Y-%m-%dT%H:%M:%S%z') # conver to isoformat
+
+        return df
+    
     def convert_ctd_nc_files_to_df(self) -> pd.DataFrame:
         """
         Converts all the associated .nc files in the config.yaml into a data frame. Concats them all
@@ -76,6 +96,7 @@ class MooringAggregator(Aggregator):
 
         df = pd.concat(nc_dfs, ignore_index=True)
         df = df.add_prefix('ctd_')
+
         return df
 
     def convert_ocean_model_nc_to_df(self) -> pd.DataFrame:
@@ -173,103 +194,106 @@ class MooringAggregator(Aggregator):
         return merged_df
     
 
-    def merge_asof_by_station_event_and_date(self,
-        left_df: pd.DataFrame, 
-        right_df: pd.DataFrame, 
-        left_date_col: str, 
-        right_date_col: str, 
-        left_station_id_col: str, 
-        right_station_id_col: str, 
-        left_event_col: str, 
-        right_event_col: str,
-        tolerance: pd.Timedelta = None 
-    ) -> pd.DataFrame:
-        """
-        Merges two DataFrames by the closest date, grouped by station and event.
+    # def merge_asof_by_station_event_and_date(self,
+    #     left_df: pd.DataFrame, 
+    #     right_df: pd.DataFrame, 
+    #     left_date_col: str, 
+    #     right_date_col: str, 
+    #     left_station_id_col: str, 
+    #     right_station_id_col: str, 
+    #     left_event_col: str, 
+    #     right_event_col: str,
+    #     tolerance: pd.Timedelta = None 
+    # ) -> pd.DataFrame:
+    #     """
+    #     Merges two DataFrames by the closest date, grouped by station and event.
 
-        This function uses a nested for-loop to iterate through each unique
-        combination of station and event, and then performs a merge_asof on
-        the date within that group.
-        """
+    #     This function uses a nested for-loop to iterate through each unique
+    #     combination of station and event, and then performs a merge_asof on
+    #     the date within that group.
+    #     """
         
-        # Step 1: Clean and Prepare Data
-        # Drop NaNs from the key columns
-        left_df_clean = left_df.dropna(subset=[left_station_id_col, left_date_col, left_event_col])
-        right_df_clean = right_df.dropna(subset=[right_station_id_col, right_date_col, right_event_col])
+    #     # Step 1: Clean and Prepare Data
+    #     # Drop NaNs from the key columns
+    #     left_df_clean = left_df.dropna(subset=[left_station_id_col, left_date_col, left_event_col])
+    #     right_df_clean = right_df.dropna(subset=[right_station_id_col, right_date_col, right_event_col])
         
-        # Ensure date columns are in datetime format
-        left_df_clean[left_date_col] = pd.to_datetime(left_df_clean[left_date_col])
-        right_df_clean[right_date_col] = pd.to_datetime(right_df_clean[right_date_col])
+    #     # Ensure date columns are in datetime format
+    #     left_df_clean[left_date_col] = pd.to_datetime(left_df_clean[left_date_col])
+    #     right_df_clean[right_date_col] = pd.to_datetime(right_df_clean[right_date_col])
 
-        # Ensure grouping columns have the same type (e.g., convert to string)
-        left_df_clean[left_station_id_col] = left_df_clean[left_station_id_col].astype(str)
-        right_df_clean[right_station_id_col] = right_df_clean[right_station_id_col].astype(str)
-        left_df_clean[left_event_col] = left_df_clean[left_event_col].astype(str)
-        right_df_clean[right_event_col] = right_df_clean[right_event_col].astype(str)
+    #     # Ensure grouping columns have the same type (e.g., convert to string)
+    #     left_df_clean[left_station_id_col] = left_df_clean[left_station_id_col].astype(str)
+    #     right_df_clean[right_station_id_col] = right_df_clean[right_station_id_col].astype(str)
+    #     left_df_clean[left_event_col] = left_df_clean[left_event_col].astype(str)
+    #     right_df_clean[right_event_col] = right_df_clean[right_event_col].astype(str)
 
-        # Step 2: Sort the DataFrames once to optimize subsetting
-        # This sort is on ALL grouping columns plus the date. It's not a required sort for the merge_asof
-        # call itself in this approach, but it makes the subsequent subsetting faster.
-        sort_columns = [left_station_id_col, left_event_col, left_date_col]
-        left_sorted = left_df_clean.sort_values(sort_columns).reset_index(drop=True)
+    #     # Step 2: Sort the DataFrames once to optimize subsetting
+    #     # This sort is on ALL grouping columns plus the date. It's not a required sort for the merge_asof
+    #     # call itself in this approach, but it makes the subsequent subsetting faster.
+    #     sort_columns = [left_station_id_col, left_event_col, left_date_col]
+    #     left_sorted = left_df_clean.sort_values(sort_columns).reset_index(drop=True)
         
-        right_sort_columns = [right_station_id_col, right_event_col, right_date_col]
-        right_sorted = right_df_clean.sort_values(right_sort_columns).reset_index(drop=True)
+    #     right_sort_columns = [right_station_id_col, right_event_col, right_date_col]
+    #     right_sorted = right_df_clean.sort_values(right_sort_columns).reset_index(drop=True)
         
-        merged_list = []
+    #     merged_list = []
         
-        # Step 3: Loop through unique station IDs and then events
-        for station_id in left_sorted[left_station_id_col].unique():
-            # Subset both DataFrames by station ID
-            left_station_subset = left_sorted[left_sorted[left_station_id_col] == station_id]
-            right_station_subset = right_sorted[right_sorted[right_station_id_col] == station_id]
+    #     # Step 3: Loop through unique station IDs and then events
+    #     for station_id in left_sorted[left_station_id_col].unique():
+    #         # Subset both DataFrames by station ID
+    #         left_station_subset = left_sorted[left_sorted[left_station_id_col] == station_id]
+    #         right_station_subset = right_sorted[right_sorted[right_station_id_col] == station_id]
             
-            for event_number in left_station_subset[left_event_col].unique():
-                # Subset the station-specific DataFrames by event number
-                left_subset = left_station_subset[left_station_subset[left_event_col] == event_number]
-                right_subset = right_station_subset[right_station_subset[right_event_col] == event_number]
+    #         for event_number in left_station_subset[left_event_col].unique():
+    #             # Subset the station-specific DataFrames by event number
+    #             left_subset = left_station_subset[left_station_subset[left_event_col] == event_number]
+    #             right_subset = right_station_subset[right_station_subset[right_event_col] == event_number]
 
-                # Critical: Ensure the subsets are sorted by the date column just before the merge.
-                # This is the step that resolves the "left keys must be sorted" error.
-                left_subset = left_subset.sort_values(left_date_col)
-                right_subset = right_subset.sort_values(right_date_col)
+    #             # Critical: Ensure the subsets are sorted by the date column just before the merge.
+    #             # This is the step that resolves the "left keys must be sorted" error.
+    #             left_subset = left_subset.sort_values(left_date_col)
+    #             right_subset = right_subset.sort_values(right_date_col)
                 
-                if not left_subset.empty and not right_subset.empty:
-                    merged_df = pd.merge_asof(
-                        left_subset,
-                        right_subset,
-                        left_on=left_date_col,
-                        right_on=right_date_col,
-                        direction='nearest',
-                        tolerance=tolerance
-                    )
-                    merged_list.append(merged_df)
+    #             if not left_subset.empty and not right_subset.empty:
+    #                 merged_df = pd.merge_asof(
+    #                     left_subset,
+    #                     right_subset,
+    #                     left_on=left_date_col,
+    #                     right_on=right_date_col,
+    #                     direction='nearest',
+    #                     tolerance=tolerance
+    #                 )
+    #                 merged_list.append(merged_df)
         
-        if merged_list:
-            final_merged_df = pd.concat(merged_list, ignore_index=True)
-        else:
-            # Handle the case where no matches were found
-            final_merged_df = pd.DataFrame(columns=left_df.columns.tolist() + right_df.columns.tolist())
+    #     if merged_list:
+    #         final_merged_df = pd.concat(merged_list, ignore_index=True)
+    #     else:
+    #         # Handle the case where no matches were found
+    #         final_merged_df = pd.DataFrame(columns=left_df.columns.tolist() + right_df.columns.tolist())
 
-        return final_merged_df
+    #     return final_merged_df
     
-    def merge_pps_with_quag(self):
+    # def merge_pps_with_quag(self):
 
-        quag_pps_df = self.merge_asof_by_station_event_and_date(
-            left_df=self.quagmire_df,
-            right_df=self.pps_df,
-            left_date_col=self.quag_utc_date_time_col,
-            right_date_col=self.pps_date_col,
-            left_station_id_col=self.quag_site_col_name,
-            right_station_id_col=self.pps_station_id_col, 
-            left_event_col=self.quag_rosette_pos_col,
-            right_event_col=self.pps_event_col_name
-        )
+    #     quag_pps_df = self.merge_asof_by_station_event_and_date(
+    #         left_df=self.quagmire_df,
+    #         right_df=self.pps_df,
+    #         left_date_col=self.quag_utc_date_time_col,
+    #         right_date_col=self.pps_date_col,
+    #         left_station_id_col=self.quag_site_col_name,
+    #         right_station_id_col=self.pps_station_id_col, 
+    #         left_event_col=self.quag_rosette_pos_col,
+    #         right_event_col=self.pps_event_col_name
+    #     )
 
-        quag_pps_df['pps_quag_time_difference'] = quag_pps_df[self.pps_date_col] - quag_pps_df[self.quag_utc_date_time_col]
-        quag_pps_df.to_csv('quag_pps_merge.csv', index=False)
+    #     quag_pps_df['pps_quag_time_difference'] = quag_pps_df[self.pps_date_col] - quag_pps_df[self.quag_utc_date_time_col]
+    #     quag_pps_df.to_csv('quag_pps_merge.csv', index=False)
     
     def merge_ctd_with_quag(self):
+        """
+        Merge the Quagmire with the CTD. when calling the merge_asof_by_station_and_date function
+        """
         
         quag_ctd_df = self.merge_asof_by_station_and_date(
             left_df=self.quagmire_df,
@@ -277,9 +301,11 @@ class MooringAggregator(Aggregator):
             left_date_col=self.quag_utc_date_time_col,
             right_date_col=self.ctd_date_col,
             left_station_id_col=self.quag_site_col_name,
-            right_station_id_col=self.ctd_station_col
+            right_station_id_col=self.ctd_station_col,
+            tolerance=self.ctd_quag_merge_tolerance
         )
 
+        # calculate the time difference between the quagmire and the CTD.
         quag_ctd_df[self.quag_utc_date_time_col] = pd.to_datetime(quag_ctd_df[self.quag_utc_date_time_col])
         quag_ctd_df[self.ctd_date_col] = pd.to_datetime(quag_ctd_df[self.ctd_date_col])
         quag_ctd_df['ctd_quag_time_difference'] = quag_ctd_df[self.ctd_date_col] - quag_ctd_df[self.quag_utc_date_time_col]
@@ -291,5 +317,29 @@ class MooringAggregator(Aggregator):
         quag_ctd_df.to_csv('quag_ctd_cnv_merge.csv', index=False)
 
         return quag_ctd_df
+    
+    def merge_quag_moor(self):
+        moor_quag_df = self.merge_asof_by_station_and_date(
+            left_df=self.quagmire_df,
+            right_df=self.mooring_df,
+            left_date_col=self.quag_utc_date_time_col,
+            right_date_col=self.mooring_measurement_date_col,
+            left_station_id_col=self.quag_site_col_name,
+            right_station_id_col=self.mooring_station_id_col
+            # tolerance=self.ctd_quag_merge_tolerance
+        )
+
+        # calculate the time difference between the quagmire and the CTD.
+        moor_quag_df[self.quag_utc_date_time_col] = pd.to_datetime(moor_quag_df[self.quag_utc_date_time_col])
+        moor_quag_df[self.mooring_measurement_date_col] = pd.to_datetime(moor_quag_df[self.mooring_measurement_date_col])
+        moor_quag_df['moor_quag_time_difference'] = moor_quag_df[self.mooring_measurement_date_col] - moor_quag_df[self.quag_utc_date_time_col]
+
+        # Change date col formats back
+        moor_quag_df[self.quag_utc_date_time_col] = moor_quag_df[self.quag_utc_date_time_col].dt.strftime('%Y-%m-%dT%H:%M:%SZ')
+        moor_quag_df[self.mooring_measurement_date_col] = moor_quag_df[self.mooring_measurement_date_col].dt.strftime('%Y-%m-%dT%H:%M:%SZ')
+        
+        moor_quag_df.to_csv('quag_moor_merge.csv', index=False)
+
+        return moor_quag_df
     
     

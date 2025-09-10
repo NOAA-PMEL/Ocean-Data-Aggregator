@@ -12,13 +12,15 @@ machine_readable_info:
   station_col: 'Cast_No.' # Must match what's in the ctd_data (This seems to vary - Station would be normal, but someimtes for Mooring/PPS it varies). Must be teh same for all the machine readable files
 
 # Mooring data 
-mooring_mat_files: # Takes a list of .mat files (in case we want to aggregate a bunch together. Right now doing OCNMS 2021-2023)
-  - /Users/zalmanek/Documents/OCNMS_data_organized/mooring_data/2023.mat
+mooring_info: # Takes a list of .mat files (in case we want to aggregate a bunch together. Right now doing OCNMS 2021-2023)
+  mooring_data_dir: /Users/zalmanek/Documents/OCNMS_data_organized/mooring_data/
+  mooring_data_timezone: America/Los_Angeles # From TimeZoneFinder() Library in python
 
 # NetCDF or .CNV info (AKA the CTD data) The directory where all the net cdf files live with the station_ids in the folder names and file names
 ctd_data:
   # net_cdf_dir: /Users/zalmanek/Development/PMEL-OME-OCNMS/Ella_combined_20250530/OCNMS_ctd_data_Ella/data/Olympic_Coast_National_Marine_Sanctuary_CTD_Data_2005_2023/netcdf_files/binned_profiles
   cnv_dir: /Users/zalmanek/Documents/OCNMS_data_organized/CTD_data/
+  ctd_quag_merge_tolerance: # should be in the form of 'pd.Timedelta('1h')'. The time tolerance to merge CTD and quagmire. Leave blank if just want to find closes datetime and have no tolerance range.
 
 # # A list of all the applicable PPS txt files
 # pps_data:

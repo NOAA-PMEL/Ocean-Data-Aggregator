@@ -1,10 +1,10 @@
 from utils.mooring_aggregator import MooringAggregator
 
 
-# python -m projects.OCNMS.2023_Jun_OCNMS_TH042.main
+# python -m projects.OCNMS.OCNMS_CTD.main.py
 
-mooring_aggregator = MooringAggregator(config_yaml='/Users/zalmanek/Development/Ocean-Data-Aggregator/projects/OCNMS/2023_Jun_OCNMS_TH042/config.yaml')
+mooring_aggregator = MooringAggregator(config_yaml='/Users/zalmanek/Development/Ocean-Data-Aggregator/projects/OCNMS/OCNMS_CTD/config.yaml')
 
-mooring_aggregator.merge_ctd_with_quag()
+mooring_aggregator.merge_quag_moor()
 
 
