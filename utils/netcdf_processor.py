@@ -1,6 +1,7 @@
 import pandas as pd
 import xarray as xr
 from pathlib import Path
+import math
 
 
 class NetcdfProcessor:
@@ -38,10 +39,11 @@ class NetcdfProcessor:
             return nc_df
 
     def convert_rom_ocean_model_to_df(self, min_depth: float, max_depth: float,
-                                      depth_var_name: str, vertical_dim_name: str,
+                                      depth_var_name: str,
                                       time_dim_name: str,
                                       start_time: str,
-                                      end_time: str) -> pd.DataFrame:
+                                      end_time: str, 
+                                      station: str) -> pd.DataFrame:
         """
         Extracts time and depth-averages data from a NetCDF file, returning a pandas DataFrame
         """
@@ -49,58 +51,40 @@ class NetcdfProcessor:
 
         # 1. Filter by the specified time range, if provided
         ds = ds.sel({time_dim_name: slice(start_time, end_time)})
+      
+        df = ds.to_dataframe().reset_index()
+        
+        # round depth to nearest 5's (min_depth down and max_depth  up) and make negative since ocean model data is negative
+        min_depth = (math.floor(min_depth / 5) * 5) *-1
+        max_depth = (math.ceil(max_depth / 5) * 5) * -1
+        print(min_depth)
+        print(max_depth)
+       
+        # filter by depth range (switch min and max because the -1 makes the min_Depth the max, and vice versa, but still the range we need)
+        depth_filtered_df = df[df[depth_var_name].between(max_depth, min_depth)]
+   
+        # Performe the depth averageing by grouping by time. mean() calculates the average for all numeric columns
+        final_df = depth_filtered_df.groupby(time_dim_name, as_index=False).mean(numeric_only=True)
 
-        # 2. Identify variables to process based on their dimension
-        variables_to_avg = [
-            var for var in ds.data_vars
-            if vertical_dim_name in ds[var].dims and time_dim_name in ds[var].dims
-        ]
+        units_dict = self.get_units_from_nc_vars(original_xr_ds=ds)
+        column_unit_dict = {
+            col: units_dict.get(col, col)
+            for col in final_df.columns
+        }
+        final_df.rename(columns=column_unit_dict, inplace=True)
+        final_df['station'] = station
+        return final_df
 
-        # 3. Identify 1D variables that should be included
-        variables_to_keep = [
-            var for var in ds.data_vars
-            if vertical_dim_name not in ds[var].dims and time_dim_name in ds[var].dims
-        ]
 
-        # 4. Filter the dataset by the specified depth range.
-        ds_filtered_by_depth = ds.where(
-            (ds[depth_var_name] >= min_depth) & (
-                ds[depth_var_name] <= max_depth),
-            drop=False
-        )
-
-        # 5. Calculate the mean of each variable over the vertical dimension.
-        ds_averaged = ds_filtered_by_depth[variables_to_avg].mean(
-            dim=vertical_dim_name, skipna=True
-        )
-
-        # 6. Add the 1D variables back to the averaged dataset.
-        for var in variables_to_keep:
-            ds_averaged[var] = ds[var]
-
-        # Get units from original dataset
-        new_col_name_dict = self.get_units_from_nc_vars(
-            avg_xr_ds=ds_averaged, original_xr_ds=ds)
-
-        ds_final = ds_averaged.rename(new_col_name_dict)
-
-        return ds_final.to_dataframe()
-
-    def get_units_from_nc_vars(self, avg_xr_ds: xr, original_xr_ds) -> dict:
-        # Gets the units from the xr_dataset vars and returns a dictionary with var: new_name (includes units)
-        # avg_xr_ds and original_xr_ds will be the same for one dimensional data like ctd data, otherwise different
-        # for ocean model data
+    def get_units_from_nc_vars(self, original_xr_ds: xr) -> dict:
+        """
+        Gets the units from the xr_dataset vars and returns a dictionary with var: new_name (includes units)
+        """
         rename_dict = {}
-        for var in list(avg_xr_ds.data_vars):
-            units = original_xr_ds[var].attrs.get('units', 'no_units')
-
-            # Check if the units are actually present and not an empty string
-            if units:
-                new_name = f"{var}_{units}".replace(
-                    ' ', '_').replace('/', '_per_')
-                rename_dict[var] = new_name
+        for var in original_xr_ds.variables:
+            if 'units' in original_xr_ds[var].attrs:
+                # Store the original name as the key and the new name as the value
+                rename_dict[str(var)] = f"{var}.{original_xr_ds[var].attrs['units'].replace(' ', '_')}"
             else:
-                # If no units, just keep the original name
-                rename_dict[var] = var
-
+                rename_dict[str(var)] = str(var)
         return rename_dict

@@ -14,12 +14,11 @@ machine_readable_info:
 # Mooring data 
 mooring_info: # Takes a list of .mat files (in case we want to aggregate a bunch together. Right now doing OCNMS 2021-2023)
   mooring_data_dir: /Users/zalmanek/Documents/OCNMS_data_organized/mooring_data/
-  mooring_data_timezone: America/Los_Angeles # From TimeZoneFinder() Library in python
 
 # NetCDF or .CNV info (AKA the CTD data) The directory where all the net cdf files live with the station_ids in the folder names and file names
 ctd_data:
-  # net_cdf_dir: /Users/zalmanek/Development/PMEL-OME-OCNMS/Ella_combined_20250530/OCNMS_ctd_data_Ella/data/Olympic_Coast_National_Marine_Sanctuary_CTD_Data_2005_2023/netcdf_files/binned_profiles
-  cnv_dir: /Users/zalmanek/Documents/OCNMS_data_organized/CTD_data/
+  net_cdf_dir: /Users/zalmanek/Development/PMEL-OME-OCNMS/Ella_combined_20250530/OCNMS_ctd_data_Ella/data/Olympic_Coast_National_Marine_Sanctuary_CTD_Data_2005_2023/netcdf_files/binned_profiles
+  # cnv_dir: /Users/zalmanek/Documents/OCNMS_data_organized/CTD_data/
   ctd_quag_merge_tolerance: # should be in the form of 'pd.Timedelta('1h')'. The time tolerance to merge CTD and quagmire. Leave blank if just want to find closes datetime and have no tolerance range.
 
 # # A list of all the applicable PPS txt files
@@ -32,6 +31,5 @@ ocean_model_data:
   model_nc_files:
     - /Users/zalmanek/Development/PMEL-OME-OCNMS/Ella_combined_20250530/Reed-Thesis-Copepod-Populations/LiveOceanTH042_2021_2023.nc
   depth_variable_name: z_rho # The name of the variable that holds the physical depth information (e.g. z_rho)
-  vertical_dim_name: s_rho # The name of the abstract vertical dimension (e.g. s_rho)
   time_dim_name: ocean_time # The name of the time dimension in the ocean model data
   

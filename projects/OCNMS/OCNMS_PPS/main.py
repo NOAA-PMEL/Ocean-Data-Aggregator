@@ -1,0 +1,10 @@
+from utils.mooring_aggregator import MooringAggregator
+
+# E1857.OC0723, and E1858.OC0723 didn't merge with any pps data because there are non within 1 hour, or even 12 hours to 1 day, 
+# depending on the sample. 
+aggregator = MooringAggregator(config_yaml='/Users/zalmanek/Development/Ocean-Data-Aggregator/projects/OCNMS/OCNMS_PPS/config.yaml')
+
+df = aggregator.merge_quag_pps_mooring_oceanmodel()
+df.to_csv("/Users/zalmanek/Development/Ocean-Data-Aggregator/projects/OCNMS/OCNMS_PPS/output/FinalOME_Merge_OCNMS23to23PPS_fixed.csv", index=False)
+
+
