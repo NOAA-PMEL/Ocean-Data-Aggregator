@@ -57,8 +57,8 @@ class NetcdfProcessor:
         # round depth to nearest 5's (min_depth down and max_depth  up) and make negative since ocean model data is negative
         min_depth = (math.floor(min_depth / 5) * 5) *-1
         max_depth = (math.ceil(max_depth / 5) * 5) * -1
-        print(min_depth)
-        print(max_depth)
+        print(f"Minimum depth filtered in ocean model .NC file {max_depth}") # min and max depth switched because negative sign added, switches them.
+        print(f"Maximum depth filtered in ocean model .NC file {min_depth}")
        
         # filter by depth range (switch min and max because the -1 makes the min_Depth the max, and vice versa, but still the range we need)
         depth_filtered_df = df[df[depth_var_name].between(max_depth, min_depth)]

@@ -8,6 +8,10 @@ class PpsTextFileProcessor:
     The file is expected to have a 'DEPLOYMENT DATA' section with a specific 3-line format per event.
     """
 
+    SAMPLE_START_DATE_COL = 'sample_start_date'
+    SAMPLE_DURATION_COL = 'sample_duration'
+    SAMPLE_END_DATE_COL = 'sample_end_date'
+
     def __init__(self, pps_txt_file: str, sites: list):
         self.pps_txt_file = Path(pps_txt_file)
         # The list of sites applicable to project. Will pull out of file name and add to df
@@ -100,4 +104,23 @@ class PpsTextFileProcessor:
                 df['station_id'] = site
                 break  # Exit loop once a match is found
 
-        return df
+        # Calculate sample_end_date
+        final_df = self.get_sample_end_date(pps_df=df)
+
+        return final_df
+
+    def get_sample_end_date(self, pps_df: pd.DataFrame) -> pd.DataFrame:
+        """
+        Calculate the sample end date based on the sample_start_date and the sample_duration.
+        """
+        # Make sure in date time format
+        pps_df[self.SAMPLE_START_DATE_COL] = pd.to_datetime(pps_df[self.SAMPLE_START_DATE_COL])
+
+        # Add end date
+        pps_df[self.SAMPLE_END_DATE_COL] = pps_df[self.SAMPLE_START_DATE_COL] + pd.to_timedelta(pps_df[self.SAMPLE_DURATION_COL], unit='s')
+
+        # Convert back to ISO format
+        pps_df[self.SAMPLE_END_DATE_COL] = pd.to_datetime(pps_df[self.SAMPLE_END_DATE_COL], format='%m/%d/%Y %H:%M:%S')
+
+        return pps_df
+    

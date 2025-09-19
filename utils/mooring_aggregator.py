@@ -4,6 +4,7 @@ from utils.netcdf_processor import NetcdfProcessor
 from utils.cnv_processor import CnvProcessor
 from pathlib import Path
 import pandas as pd
+import numpy as np
 
 # TODO: update the merge_ctd_with_quag function to have a tolerance of '1H' (check with Zack) after running the OCNMS code (needs to be adjustable for the code)
 
@@ -23,22 +24,49 @@ class MooringAggregator(Aggregator):
         self.mooring_measurement_date_col = 'moor_measurement_datetime' # the name of the date column in the mooring data - creatd in the matFileProcessor
         self.mooring_df = self.convert_mat_files_to_df()
         
-        # For CTD data derived (can be .NC or .CNV)
-        if self.config_file.get('ctd_data', None):
-            self.ctd_quag_merge_tolerance = self.config_file['ctd_data'].get('ctd_quag_merge_tolerance', None)
-            if self.config_file['ctd_data'].get('net_cdf_dir', None):
-                self.ctd_nc_file_directory = Path(self.config_file['ctd_data']['net_cdf_dir'])
-                self.ctd_df = self.convert_ctd_nc_files_to_df()
-            elif self.config_file['ctd_data'].get('cnv_dir', None):
-                self.ctd_cnv_file_directory = Path(self.config_file['ctd_data']['cnv_dir'])
-                self.ctd_df = self.convert_ctd_cnv_files_to_df()
+        # # For CTD data derived (can be .NC or .CNV)
+        # if self.config_file.get('ctd_data', None):
+        #     self.ctd_quag_merge_tolerance = self.config_file['ctd_data'].get('ctd_quag_merge_tolerance', None)
+        #     if self.config_file['ctd_data'].get('net_cdf_dir', None):
+        #         self.ctd_nc_file_directory = Path(self.config_file['ctd_data']['net_cdf_dir'])
+        #         self.ctd_df = self.convert_ctd_nc_files_to_df()
+        #     elif self.config_file['ctd_data'].get('cnv_dir', None):
+        #         self.ctd_cnv_file_directory = Path(self.config_file['ctd_data']['cnv_dir'])
+        #         self.ctd_df = self.convert_ctd_cnv_files_to_df()
 
-        # For Ocean model data (.NC file)
-        self.model_data_files = self.config_file['ocean_model_data']['model_nc_files']
-        self.ocean_model_depth_var = self.config_file['ocean_model_data']['depth_variable_name']
-        self.ocean_model_time_dim_name = self.config_file['ocean_model_data']['time_dim_name']
-        self.ocean_model_df = self.convert_ocean_model_nc_to_df()
+        # # For Ocean model data (.NC file)
+        # self.model_data_files = self.config_file['ocean_model_data']['model_nc_files']
+        # self.ocean_model_depth_var = self.config_file['ocean_model_data']['depth_variable_name']
+        # self.ocean_model_time_dim_name = self.config_file['ocean_model_data']['time_dim_name']
+        # self.ocean_model_df = self.convert_ocean_model_nc_to_df()
 
+    def FINALmerge_quag_pps_mooring_oceanmodel(self):
+        """
+        Merges the quagmire, pps, mooring, and ocean model data together
+        """
+        quag_pps_merged = self.merge_pps_quag_on_station_rosette_localtime(quag_df=self.quagmire_df)
+        quag_pps_mooring_merged = self.merge_moor_quag_on_station_localtime(quag_df=quag_pps_merged)
+        quag_pps_mooring_ocean_model_merged = self.merge_oceanmodel_quag_on_station_utctime(quag_df=quag_pps_mooring_merged)
+
+        # remove any rows that are entirely empty
+        final_df = quag_pps_mooring_ocean_model_merged.dropna(axis=1, how='all')
+        print("Mooring, PPS, and Ocean Model data merged to QAQC Data!!")
+        return final_df
+    
+    def FINALmerge_quag_ctd_mooring_oceanmodel(self):
+        """
+        Merges the Quagmire, CTD, mooring, and ocean model data together.
+        """
+        
+        quag_ctd_df = self.merge_ctd_quag_on_station_utctime(quag_df=self.quagmire_df)
+        quag_ctd_mooring_df = self.merge_moor_quag_on_station_localtime(quag_df=quag_ctd_df)
+        quag_ctd_mooring_ocean_df = self.merge_oceanmodel_quag_on_station_utctime(quag_df=quag_ctd_mooring_df)
+        
+        # remove any rows that are entirely empty
+        final_df = quag_ctd_mooring_ocean_df.dropna(axis=1, how='all')
+
+        return final_df
+    
     def convert_mat_files_to_df(self) -> pd.DataFrame:
         # TODO: upate hardcoded sites in the convert_mat_files_to_dfs to not be hardcoded (take from Quagmire sites)
         """
@@ -58,22 +86,10 @@ class MooringAggregator(Aggregator):
         df = pd.concat(mooring_dfs, ignore_index=True)
 
         df = df.add_prefix('moor_')
+        df_cleaned = df.dropna(axis=1, how='all')
+        df_cleaned.to_csv('moor.csv', index=False)
 
-        # Took out timezone update because will just merge on local time
-        # updated_dates_df = self.update_moor_timezone_to_utc(df=df, column_names=['moor_deployment_time', self.mooring_measurement_date_col])
-        return df
-
-    # def update_moor_timezone_to_utc(self, df: pd.DataFrame, column_names: list) -> pd.DataFrame:
-    #     """
-    #     Update the timezone fo the mooring file datetime columns to UTC.
-    #     """
-    #     for col in column_names:
-    #         df[col] = pd.to_datetime(df[col])
-    #         df[col] = df[col].dt.tz_localize(self.moor_time_zone)
-    #         df[col] = df[col].dt.tz_convert('UTC')
-    #         df[col] = df[col].dt.strftime('%Y-%m-%dT%H:%M:%S%z') # conver to isoformat
-
-    #     return df
+        return df_cleaned
     
     def convert_ctd_nc_files_to_df(self) -> pd.DataFrame:
         """
@@ -96,8 +112,9 @@ class MooringAggregator(Aggregator):
 
         df = pd.concat(nc_dfs, ignore_index=True)
         df = df.add_prefix('ctd_')
+        df_cleaned = df.dropna(axis=1, how='all')
 
-        return df
+        return df_cleaned
 
     def convert_ocean_model_nc_to_df(self) -> pd.DataFrame:
 
@@ -119,7 +136,8 @@ class MooringAggregator(Aggregator):
 
         df = pd.concat(nc_dfs, ignore_index=True)
         df = df.add_prefix('model_')
-        return df
+        df_cleaned = df.dropna(axis=1, how='all')
+        return df_cleaned
 
     def convert_ctd_cnv_files_to_df(self) -> pd.DataFrame:
         """
@@ -136,97 +154,46 @@ class MooringAggregator(Aggregator):
         
         df = pd.concat(cnv_dfs, ignore_index=False)
         df = df.add_prefix('ctd_')
-        return df
+        df_cleaned = df.dropna(axis=1, how='all')
+        return df_cleaned
     
-    
-    
-    
-    
-    
-    
-    def merge_asof_by_station_and_date(self,
-        left_df: pd.DataFrame, 
-        right_df: pd.DataFrame, 
-        left_date_col: str, 
-        right_date_col: str, 
-        left_station_id_col: str, 
-        right_station_id_col: str, 
-        tolerance: pd.Timedelta = None # like pd.Timedelta('1h')
-    ) -> pd.DataFrame:
-
+    def merge_ctd_quag_on_station_utctime(self, quag_df: pd.DataFrame, tolerance: str = '1h') -> pd.DataFrame:
         """
-        1st step: merge ctd with pps (PPS data is left hand side) by date and station_id. Merge by getting closest date in CTD data to PPS data.
-        Grouped by station_id
+        Merges quagmire dataframe with ctd data frame on utc time by station. The CnvProcessor 
+        makes sure its in utc time. If using a ctd_df that was derived from .NC files, need to 
+        make sure that date/time column is utc, or add functionality to merge on local time. 
+        quag_df is in input into this function because can add a quag_df that
+        has already been merged with other data if desired. Otherwise just use self.quagmire_df.
+        tolerance is default 1 hour, but can change this in yaml file.
         """
-         # clean - drop na
-        left_df_clean = left_df.dropna(subset=[left_station_id_col, left_date_col])
-        rigt_df_clean = right_df.dropna(subset=[right_station_id_col, right_date_col])
-        
-        # sort
-        left_sorted = left_df_clean.sort_values([left_station_id_col, left_date_col]).reset_index(drop=True)
-        right_sorted = rigt_df_clean.sort_values([right_station_id_col, right_date_col]).reset_index(drop=True)
+        # Sort quag_df and mooring_df by the 'on' key first which is time, then the 'by' key which is station
+        quag_df_sorted = quag_df.sort_values([self.quag_utc_date_time_col, self.quag_site_col_name])
+        ctd_sorted = self.ctd_df.sort_values([self.CTD_DATE_COL, self.CTD_STATION_COL])
 
-        # Ensure in datetime
-        left_sorted[left_date_col] = pd.to_datetime(left_sorted[left_date_col])
-        right_sorted[right_date_col] = pd.to_datetime(right_sorted[right_date_col])
+        # Convert columns to the same types
+        quag_df_sorted[self.quag_utc_date_time_col] = pd.to_datetime(quag_df_sorted[self.quag_utc_date_time_col])
+        ctd_sorted[self.CTD_DATE_COL] = pd.to_datetime(ctd_sorted[self.CTD_DATE_COL])
+        quag_df_sorted[self.quag_site_col_name] = quag_df_sorted[self.quag_site_col_name].astype(str)
+        ctd_sorted[self.CTD_STATION_COL] = ctd_sorted[self.CTD_STATION_COL].astype(str)
 
-        merged_list = []
-        for station_id in left_sorted[left_station_id_col].unique():
-            left_subset =left_sorted[left_sorted[left_station_id_col] == station_id]
-            right_subset = right_sorted[right_sorted[right_station_id_col] == station_id]
-            
-            # Subsets are already sorted but re-sorting is a good practice for robustness
-            left_subset = left_subset.sort_values(left_date_col)
-            right_subset = right_subset.sort_values(right_date_col)
-            
-            merged_df = pd.merge_asof(
-                left_subset,
-                right_subset,
-                left_on=left_date_col,
-                right_on=right_date_col,
-                direction='nearest',
-                tolerance=tolerance # default None to just find closest date
-            )
-            merged_list.append(merged_df)
-            
-        merged_df = pd.concat(merged_list, ignore_index=True)
-
-        # Change date columns back to format we want:
-        merged_df[left_date_col] = merged_df[left_date_col].dt.strftime('%Y-%m-%dT%H:%M:%SZ')
-        merged_df[right_date_col] = merged_df[right_date_col].dt.strftime('%Y-%m-%dT%H:%M:%SZ')
-
-        return merged_df
+        # If the ctd_quag_merge_tolerance is provided in the config.yaml file, update the tolerance, otherwise 
+        # use default of 1 hour.
+        if self.config_file.get('ctd_data', None):
+            if self.config_file['ctd_data'].get('ctd_quag_merge_tolerance', None):
+                tolerance = self.config_file['ctd_data'].get('ctd_quag_merge_tolerance')
     
-    
-    def merge_ctd_with_quag(self):
-        """
-        Merge the Quagmire with the CTD. when calling the merge_asof_by_station_and_date function
-        """
-        
-        quag_ctd_df = self.merge_asof_by_station_and_date(
-            left_df=self.quagmire_df,
-            right_df=self.ctd_df,
-            left_date_col=self.quag_utc_date_time_col,
-            right_date_col=self.CTD_DATE_COL,
-            left_station_id_col=self.quag_site_col_name,
-            right_station_id_col=self.CTD_STATION_COL,
-            tolerance=self.ctd_quag_merge_tolerance
+        result = pd.merge_asof(
+            quag_df_sorted,
+            ctd_sorted,
+            left_on = self.quag_utc_date_time_col,
+            right_on = self.CTD_DATE_COL,
+            left_by = self.quag_site_col_name,
+            right_by = self.CTD_STATION_COL,
+            direction = 'nearest', 
+            tolerance = pd.Timedelta(tolerance)
         )
 
-        # calculate the time difference between the quagmire and the CTD.
-        quag_ctd_df[self.quag_utc_date_time_col] = pd.to_datetime(quag_ctd_df[self.quag_utc_date_time_col])
-        quag_ctd_df[self.CTD_DATE_COL] = pd.to_datetime(quag_ctd_df[self.CTD_DATE_COL])
-        quag_ctd_df['ctd_quag_time_difference'] = quag_ctd_df[self.CTD_DATE_COL] - quag_ctd_df[self.quag_utc_date_time_col]
-
-        # Change date col formats back
-        quag_ctd_df[self.quag_utc_date_time_col] = quag_ctd_df[self.quag_utc_date_time_col].dt.strftime('%Y-%m-%dT%H:%M:%SZ')
-        quag_ctd_df[self.CTD_DATE_COL] = quag_ctd_df[self.CTD_DATE_COL].dt.strftime('%Y-%m-%dT%H:%M:%SZ')
-        
-        quag_ctd_df.to_csv('quag_ctd_cnv_merge.csv', index=False)
-
-        return quag_ctd_df
-    
-
+        return result
 
     def merge_moor_quag_on_station_localtime(self, quag_df: pd.DataFrame):
         """
@@ -291,12 +258,70 @@ class MooringAggregator(Aggregator):
 
         return result
 
-    def merge_quag_pps_mooring_oceanmodel(self):
+    def merge_pps_mooring_by_local_timeframe_average_and_station(self, pps_df: pd.DataFrame) -> pd.DataFrame:
         """
-        Merges the quagmire, pps, mooring, and ocean model data together
+        Merges the PPS dataframe with the mooring df by averaging all columns 
+        that fall between the start and end time pluse half the average time interval for
+        pps recordings. Merges also by station. pps_df is an input because the pps may 
+        have already been merged with other data
         """
-        quag_pps_merged = self.merge_pps_quag_on_station_rosette_time(quag_df=self.quagmire_df)
-        quag_pps_mooring_merged = self.merge_moor_quag_on_station_localtime(quag_df=quag_pps_merged)
-        quag_pps_mooring_ocean_model_merged = self.merge_oceanmodel_quag_on_station_utctime(quag_df=quag_pps_mooring_merged)
-        print("Mooring, PPS, and Ocean Model data merged to QAQC Data!!")
-        return quag_pps_mooring_ocean_model_merged
+        moor_df = self.mooring_df.copy()
+        pps_df = pps_df.copy()
+
+        # Find half of pps time interval and conver tto time delta
+        pps_time_buffer = pd.Timedelta(self.pps_time_interval/2)
+
+        pps_df[self.PPS_START_DATE_COL] = pd.to_datetime(pps_df[self.PPS_START_DATE_COL])
+        pps_df[self.PPS_END_DATE_COL] = pd.to_datetime(pps_df[self.PPS_END_DATE_COL])
+        moor_df[self.mooring_measurement_date_col] = pd.to_datetime(moor_df[self.mooring_measurement_date_col])
+
+        # Calculate the expanded time window for mooring data
+        pps_df['pps_expanded_start'] = pps_df[self.PPS_START_DATE_COL] - pps_time_buffer
+        pps_df['pps_expanded_end'] = pps_df[self.PPS_END_DATE_COL] + pps_time_buffer
+
+        numeric_cols = moor_df.select_dtypes(include=[np.number]).columns.tolist()
+        
+        results = []
+
+        for idx, pps_row in pps_df.iterrows():
+            # Find matching moor_df rows by station and expanded time window
+            station_match = moor_df[moor_df[self.MOORING_STATION_ID_COL] == pps_row[self.PPS_STATION_ID_COL]]
+
+            time_match = station_match[
+                (station_match[self.mooring_measurement_date_col] >= pps_row['pps_expanded_start']) &
+                (station_match[self.mooring_measurement_date_col] <= pps_row['pps_expanded_end'])
+            ]
+
+            if len(time_match) > 0:
+                # calculate averages for numeric columns
+                averaged_data = time_match[numeric_cols].mean()
+
+            # Create result row
+            result_row = pps_row
+
+            # Add averaged values
+            for col in numeric_cols:
+                result_row[col] = averaged_data[col]
+
+            # Add count of matched rows and mooring min/and max dates that matched to pps. Add the moor_station id column back in (this is just adding it back in, the pps and moor station cols were matched above)
+            result_row['moor_min_date'] = time_match[self.mooring_measurement_date_col].min()
+            result_row['moor_max_date'] = time_match[self.mooring_measurement_date_col].max()
+            result_row[self.MOORING_STATION_ID_COL] = pps_row[self.PPS_STATION_ID_COL]
+            result_row['moor_count_avg'] = len(time_match)
+                
+            results.append(result_row)
+
+        else:
+            # No matching mooring data - add row with NaN values
+            result_row = pps_row.copy()
+            for col in numeric_cols:
+                result_row[col] = np.nan
+            result_row['moor_count_avg'] = 0
+            results.append(result_row)
+
+        # Convert results to DataFrame
+        result_df = pd.DataFrame(results)
+
+        return result_df
+
+        

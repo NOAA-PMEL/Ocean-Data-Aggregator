@@ -3,7 +3,6 @@ import pandas as pd
 import re
 import numpy as np
 from datetime import datetime, timedelta
-from timezonefinder import TimezoneFinder
 from zoneinfo import ZoneInfo
 
 
@@ -92,28 +91,6 @@ class MatFileProcessor:
         except (ValueError, IndexError):
             depth_m = np.nan
 
-        ## Get time zone info
-        tf = TimezoneFinder()
-        latitude, longitude = np.nan, np.nan
-        try:
-            file_header_data = file_data_dict.get(f'{var}_file_header')
-            if isinstance(file_header_data, np.ndarray):
-                header_text = '\n'.join(str(s) for s in file_header_data)
-                
-                lat_match = re.search(r'Latitude:\s*(-?\d+\.?\d*)', header_text)
-                lon_match = re.search(r'Longitude:\s*(-?\d+\.?\d*)', header_text)
-                
-                if lat_match:
-                    latitude = float(lat_match.group(1))
-                if lon_match:
-                    longitude = float(lon_match.group(1))
-        except Exception as e:
-            pass
-
-        timezone = None
-        if pd.notna(latitude) and pd.notna(longitude):
-            timezone = tf.timezone_at(lng=longitude, lat=latitude)
-
         # Extract deployment time - handle both string and datenum formats
         try:
             deployment_time_raw = file_data_dict[f'{var}_db_DeploymentTime']
@@ -129,7 +106,7 @@ class MatFileProcessor:
         except (KeyError, ValueError, TypeError):
             deployment_time = pd.NaT
 
-        return station_id, depth_m, deployment_time, timezone
+        return station_id, depth_m, deployment_time
 
     def _process_time_series_data(self, file_data_dict: dict, var: str) -> dict:
         """
@@ -215,22 +192,10 @@ class MatFileProcessor:
             self._process_mat_struct(info, var, file_data_dict)
 
             # Extract metadata
-            station_id, depth_m, deployment_time, timezone = self._extract_metadata(
+            station_id, depth_m, deployment_time = self._extract_metadata(
                 var, file_data_dict)
             print(
-                f"  Station: {station_id}, Depth: {depth_m}m, Deployment: {deployment_time}, timezone: {timezone}")
-            
-            # Took out this code because timezone is updated in Mooring_Aggregator using config.yaml file, so the
-            # timezone functionality in this code is incomplete. Not all .mat files seem to have lat/lon to find timezone
-            # so can't add timezone the same way.
-            # ### Add timezone info to deployment time
-            # if pd.notna(deployment_time) and timezone:
-            #     try:
-            #         local_tz = ZoneInfo(timezone)
-            #         deployment_time = deployment_time.replace(tzinfo=local_tz)
-            #     except Exception as e:
-            #         print(f"  Warning: Could not localize deployment time for '{timezone}'. Error: {e}")
-            #         deployment_time = pd.NaT.tz_localize(None)
+                f"  Station: {station_id}, Depth: {depth_m}m, Deployment: {deployment_time}")
 
             # Process time-series data
             processed_data = self._process_time_series_data(

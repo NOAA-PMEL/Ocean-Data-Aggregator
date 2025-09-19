@@ -4,7 +4,7 @@ from utils.mooring_aggregator import MooringAggregator
 # depending on the sample. 
 aggregator = MooringAggregator(config_yaml='/Users/zalmanek/Development/Ocean-Data-Aggregator/projects/OCNMS/OCNMS_PPS/config.yaml')
 
-df = aggregator.merge_quag_pps_mooring_oceanmodel()
+df = aggregator.FINALmerge_quag_pps_mooring_oceanmodel()
 df.to_csv("/Users/zalmanek/Development/Ocean-Data-Aggregator/projects/OCNMS/OCNMS_PPS/output/FinalOME_Merge_OCNMS23to23PPS_fixed.csv", index=False)
 
 

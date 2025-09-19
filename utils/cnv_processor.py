@@ -77,7 +77,7 @@ class CnvProcessor:
             except KeyError as e:
                 raise KeyError(f"No 'timeJ_Julian_Days' column found in the cnv_df: {e}")
         else:
-            raise ValueError(f"HAve not yet accounted for .cnv file to be in local time - please add functionality to get_collectiond_dates_from_julian_days")
+            raise ValueError(f"Have not yet accounted for .cnv file to be in local time - please add functionality to get_collectiond_dates_from_julian_days")
 
         return cnv_df
 
