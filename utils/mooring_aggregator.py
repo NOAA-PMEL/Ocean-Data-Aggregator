@@ -409,8 +409,10 @@ class MooringAggregator(Aggregator):
     
     def convert_local_time_to_utc(self, local_dt: str, timezone: str, sample_name: str) -> str:
         """
-        Converts a time to utc based on timezone. To be used with 
-        get_time_zone_by_lat_lon_dec_degrees function
+        Converts a time to utc based on timezone. This is used for the PPS data (already
+        merged with the Quag data) because it is in local time and need to use the timzone
+        calculated in for the Quag to convert PPS times to UTC. So that PPS data can be 
+        merged with other data on UTC time if needed (e.g. ocean model data.)
         """
         try:
             local_tz = pytz.timezone(timezone) # get the timezone object using pytz
