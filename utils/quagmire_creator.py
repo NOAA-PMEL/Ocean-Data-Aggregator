@@ -19,6 +19,7 @@ class QuagmireCreator:
     CAST_COL = 'Cast'
     ROSETTE_POS_COL = 'Rosette_position'
     DEPTH_COL = 'Depth_m'
+    SAMPLE_NAME_COL = 'Sample_Name'
     
     # New columns created in this class
     NEW_TIMEZONE_COL = 'local_timezone'
@@ -197,3 +198,4 @@ class QuagmireCreator:
         df[self.ROSETTE_POS_COL] = df[self.ROSETTE_POS_COL].astype(str)
         df[self.ROSETTE_POS_COL] = df[self.ROSETTE_POS_COL].str.extract(r'(\d+)', expand=False)
         return df
+    
