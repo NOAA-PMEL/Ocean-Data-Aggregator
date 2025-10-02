@@ -6,10 +6,11 @@ from datetime import datetime
 # TODO: Add time zone conversion in check_time_zone. Right now it just makes sure local time == utc which means they are the same
 
 class CnvProcessor:
-    def __init__(self, cnv_file: str, sites: list):
+    def __init__(self, cnv_file: str, sites: list, day_convention: str):
 
         self.cnv_file = cnv_file
         self.sites = sites
+        self.day_convention = day_convention # specifies julian day 0 or 1. 
         self.start_time = self.get_the_start_time()
         self.system_times = self.get_system_time()
         self.cnv_df = self.convert_cnv_to_df()
@@ -62,18 +63,34 @@ class CnvProcessor:
 
                     # Convert to ISO format
                     dt = datetime.strptime(start_time, '%b %d %Y %H:%M:%S')
-                    return dt
-                    
+                    return dt                
                     
     def get_collection_dates_from_julian_days(self, cnv_df: pd.DataFrame) -> pd.DataFrame:
         """
         If the df has a column called timeJ_Julian_Days calculate the time stamps because its absolute (Julian days = number of days stince January 1 of the start of the year)
         """
+        # If the data is '1-day' (JD 1.0 = Jan 1st 00:00:00), we use the raw value.
+        # (This is the convention your original code was inadvertently applying before the fix.)
+        if self.day_convention == '0 day':
+            offset = -1
+        # If the data is '1-day' (JD 1.0 = Jan 1st 00:00:00), we use the raw value.
+        # (This is the convention your original code was inadvertently applying before the fix.)
+        elif self.day_convention == '1 day':
+            offset = 0
+        else:
+            raise ValueError(f"Invalid 'day_convention' specified: {self.day_convention}. Must be '0-day' or '1-day'.")
+        # Apply the offset to the Julian Day column
+        corrected_jd = cnv_df['timeJ_Julian_Days'] + offset
+
         # See if the system is in localtime or UTC time. # Checks if closest is UTC or if the localtime and UTC time are the same.
         closest_time_to_start_time = min(self.system_times.keys(), key=lambda k: abs(self.system_times[k] - self.start_time))
         if closest_time_to_start_time == 'UTC' or (self.system_times['localtime'] == self.system_times['UTC']):
             try:
-                cnv_df['time'] = pd.to_datetime(cnv_df['timeJ_Julian_Days'], unit='D', origin= f'{self.start_time.year}-01-01').dt.tz_localize('UTC')
+                cnv_df['time'] = pd.to_datetime(
+                    corrected_jd, 
+                    unit='D', 
+                    origin= f'{self.start_time.year}-01-01'
+                    ).dt.tz_localize('UTC')
             except KeyError as e:
                 raise KeyError(f"No 'timeJ_Julian_Days' column found in the cnv_df: {e}")
         else:

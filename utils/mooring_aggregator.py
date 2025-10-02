@@ -18,15 +18,14 @@ class MooringAggregator(Aggregator):
     MOORING_STATION_ID_COL = 'moor_station_id' # the name of the station_id col in the mooring data
     CTD_STATION_COL = 'ctd_station_id' # From the netcdfProcessor and/or cnvProcessor (must be the same)
     CTD_DATE_COL = 'ctd_time' # from the netcdfProcessor and/or cnvProcessor (must be the same)
-    PPS_UTC_START_TIME_COL = 'pps_utc_start_time'
-    PPS_UTC_END_TIME_COL = 'pps_utc_end_time_col'
+    MOORING_DATE_COL = 'moor_datetime'  #mooring time is assumed to be UTC
 
     def __init__(self, config_yaml: str):
         super().__init__(config_yaml)
 
         # For Mooring data derived from .mat files
         self.mooring_mat_dir = Path(self.config_file['mooring_info']['mooring_data_dir'])
-        self.mooring_measurement_date_col = 'moor_measurement_datetime' # the name of the date column in the mooring data - creatd in the matFileProcessor
+        self.moor_sensors = self.config_file['mooring_info'].get('sensors', None) # The name of the sensors to grab data
         self.mooring_df = self.convert_mat_files_to_df()
         
         # For CTD data derived (can be .NC or .CNV)
@@ -37,6 +36,7 @@ class MooringAggregator(Aggregator):
                 self.ctd_df = self.convert_ctd_nc_files_to_df()
             elif self.config_file['ctd_data'].get('cnv_dir', None):
                 self.ctd_cnv_file_directory = Path(self.config_file['ctd_data']['cnv_dir'])
+                self.ctd_day_convention = self.config_file['ctd_data']['julian_day_convention']
                 self.ctd_df = self.convert_ctd_cnv_files_to_df()
 
         # For Ocean model data (.NC file)
@@ -56,11 +56,11 @@ class MooringAggregator(Aggregator):
 
         # Since pps data does not have timezone info, but times are in local need to get timezone info from quagmire and create start/end utc times for pps
         # important for merging pps data with ocean_model data (which is in UTC). 
-        quag_pps_merged[self.PPS_UTC_START_TIME_COL] = quag_pps_merged.apply(lambda row: self.convert_local_time_to_utc(local_dt=row[self.PPS_START_DATE_COL], timezone=row[self.quag_local_time_zone_col], sample_name=row[self.quag_sample_name_col]), axis=1)
-        quag_pps_merged[self.PPS_UTC_END_TIME_COL] = quag_pps_merged.apply(lambda row: self.convert_local_time_to_utc(local_dt=row[self.PPS_END_DATE_COL], timezone=row[self.quag_local_time_zone_col], sample_name=row[self.quag_sample_name_col]), axis=1)
+        quag_pps_merged[self.PPS_UTC_START_TIME_COL] = quag_pps_merged.apply(lambda row: self.convert_local_time_to_utc(local_dt=row[self.PPS_LOCAL_START_DATE_COL], timezone=row[self.quag_local_time_zone_col], sample_name=row[self.quag_sample_name_col]), axis=1)
+        quag_pps_merged[self.PPS_UTC_END_TIME_COL] = quag_pps_merged.apply(lambda row: self.convert_local_time_to_utc(local_dt=row[self.PPS_LOCAL_END_DATE_COL], timezone=row[self.quag_local_time_zone_col], sample_name=row[self.quag_sample_name_col]), axis=1)
         
         
-        quag_pps_mooring_merged = self.merge_pps_mooring_by_local_timeframe_average_and_station(pps_df=quag_pps_merged)
+        quag_pps_mooring_merged = self.merge_pps_mooring_by_utc_timeframe_average_and_station(pps_df=quag_pps_merged)
         quag_pps_mooring_ocean_model_merged = self.merge_pps_ocean_model_by_utc_timeframe_average_and_station(pps_df=quag_pps_mooring_merged)
 
         # remove any columns that are entirely empty
@@ -74,11 +74,12 @@ class MooringAggregator(Aggregator):
         """
         
         quag_ctd_df = self.merge_ctd_quag_on_station_utctime(quag_df=self.quagmire_df)
-        quag_ctd_mooring_df = self.merge_moor_quag_on_station_localtime(quag_df=quag_ctd_df)
+        quag_ctd_mooring_df = self.merge_moor_quag_on_station_utctime(quag_df=quag_ctd_df)
         quag_ctd_mooring_ocean_df = self.merge_oceanmodel_quag_on_station_utctime(quag_df=quag_ctd_mooring_df)
         
         # remove any columns that are entirely empty
         final_df = quag_ctd_mooring_ocean_df.dropna(axis=1, how='all')
+        print("Mooring, CTD, and Ocean Model data merged to QAQC!")
 
         return final_df
     
@@ -93,9 +94,9 @@ class MooringAggregator(Aggregator):
         mooring_dfs = []
         for mat_file in all_mat_files:
             mat_processor = MatFileProcessor(
-                sites=self.quag_station_sites, mat_file=mat_file)
+                sites=self.quag_station_sites, mat_file=mat_file, sensors=self.moor_sensors)
 
-            mooring_df = mat_processor.process_mat_data_like_ocnms()
+            mooring_df = mat_processor.get_ocnms_df_from_mat_file()
             mooring_dfs.append(mooring_df)
 
         df = pd.concat(mooring_dfs, ignore_index=True)
@@ -162,7 +163,7 @@ class MooringAggregator(Aggregator):
 
         cnv_dfs = []
         for cnv_file in all_cnv_files:
-            cnv_processor = CnvProcessor(cnv_file=cnv_file, sites=self.quag_station_sites)
+            cnv_processor = CnvProcessor(cnv_file=cnv_file, sites=self.quag_station_sites, day_convention=self.ctd_day_convention)
             cnv_df = cnv_processor.cnv_df
             cnv_dfs.append(cnv_df)
         
@@ -207,30 +208,34 @@ class MooringAggregator(Aggregator):
             tolerance = pd.Timedelta(tolerance)
         )
 
+        result['ctd_quag_time_difference'] = abs(
+            result[self.quag_utc_date_time_col] - result[self.CTD_DATE_COL]
+        )
+
         return result
 
-    def merge_moor_quag_on_station_localtime(self, quag_df: pd.DataFrame):
+    def merge_moor_quag_on_station_utctime(self, quag_df: pd.DataFrame):
         """
         Merge mooring data with quagmire data on station and closest time (within one hour). 
-        Time is merged assuming local time. Are .mat files always in local time?
+        Time is merged assuming UTC time. Are .mat files always in UTC time?
         Takes quag_df as an input because quag_df could be the self.quagmire_df already
         merged with another data type
         """
         # Sort quag_df and mooring_df by the 'on' key first which is time, then the 'by' key which is station
-        quag_df_sorted = quag_df.sort_values([self.quag_local_date_time_col, self.quag_site_col_name])
-        moor_df_sorted = self.mooring_df.sort_values([self.mooring_measurement_date_col, self.MOORING_STATION_ID_COL])
+        quag_df_sorted = quag_df.sort_values([self.quag_utc_date_time_col, self.quag_site_col_name])
+        moor_df_sorted = self.mooring_df.sort_values([self.MOORING_DATE_COL, self.MOORING_STATION_ID_COL])
 
         # Convert columns to the same types
-        quag_df_sorted[self.quag_local_date_time_col] = pd.to_datetime(quag_df_sorted[self.quag_local_date_time_col])
-        moor_df_sorted[self.mooring_measurement_date_col] = pd.to_datetime(moor_df_sorted[self.mooring_measurement_date_col])
+        quag_df_sorted[self.quag_utc_date_time_col] = pd.to_datetime(quag_df_sorted[self.quag_utc_date_time_col])
+        moor_df_sorted[self.MOORING_DATE_COL] = pd.to_datetime(moor_df_sorted[self.MOORING_DATE_COL])
         quag_df_sorted[self.quag_site_col_name] = quag_df_sorted[self.quag_site_col_name].astype(str)
         moor_df_sorted[self.MOORING_STATION_ID_COL] = moor_df_sorted[self.MOORING_STATION_ID_COL].astype(str)
     
         result = pd.merge_asof(
             quag_df_sorted,
             moor_df_sorted,
-            left_on = self.quag_local_date_time_col,
-            right_on = self.mooring_measurement_date_col,
+            left_on = self.quag_utc_date_time_col,
+            right_on = self.MOORING_DATE_COL,
             left_by = self.quag_site_col_name,
             right_by = self.MOORING_STATION_ID_COL,
             direction = 'nearest', 
@@ -272,10 +277,10 @@ class MooringAggregator(Aggregator):
 
         return result
 
-    def merge_pps_mooring_by_local_timeframe_average_and_station(self, pps_df: pd.DataFrame) -> pd.DataFrame:
+    def merge_pps_mooring_by_utc_timeframe_average_and_station(self, pps_df: pd.DataFrame) -> pd.DataFrame:
         """
         Merges the PPS dataframe with the mooring df by averaging all columns 
-        that fall between the start and end time plus half the average time interval for
+        that fall between the start and end time (in UTC) plus half the average time interval for
         pps recordings. Merges also by station. pps_df is an input because the pps may 
         have already been merged with other data
         """
@@ -285,13 +290,13 @@ class MooringAggregator(Aggregator):
         # Find half of pps time interval and conver tto time delta
         pps_time_buffer = pd.Timedelta(self.pps_time_interval/2)
 
-        pps_df[self.PPS_START_DATE_COL] = pd.to_datetime(pps_df[self.PPS_START_DATE_COL])
-        pps_df[self.PPS_END_DATE_COL] = pd.to_datetime(pps_df[self.PPS_END_DATE_COL])
-        moor_df[self.mooring_measurement_date_col] = pd.to_datetime(moor_df[self.mooring_measurement_date_col])
+        pps_df[self.PPS_UTC_START_TIME_COL] = pd.to_datetime(pps_df[self.PPS_UTC_START_TIME_COL])
+        pps_df[self.PPS_UTC_END_TIME_COL] = pd.to_datetime(pps_df[self.PPS_UTC_END_TIME_COL])
+        moor_df[self.MOORING_DATE_COL] = pd.to_datetime(moor_df[self.MOORING_DATE_COL])
 
         # Calculate the expanded time window for mooring data
-        pps_df['pps_expanded_start'] = pps_df[self.PPS_START_DATE_COL] - pps_time_buffer
-        pps_df['pps_expanded_end'] = pps_df[self.PPS_END_DATE_COL] + pps_time_buffer
+        pps_df['pps_expanded_start'] = pps_df[self.PPS_UTC_START_TIME_COL] - pps_time_buffer
+        pps_df['pps_expanded_end'] = pps_df[self.PPS_UTC_START_TIME_COL] + pps_time_buffer
 
         numeric_cols = moor_df.select_dtypes(include=[np.number]).columns.tolist()
         
@@ -302,8 +307,8 @@ class MooringAggregator(Aggregator):
             station_match = moor_df[moor_df[self.MOORING_STATION_ID_COL] == pps_row[self.PPS_STATION_ID_COL]]
 
             time_match = station_match[
-                (station_match[self.mooring_measurement_date_col] >= pps_row['pps_expanded_start']) &
-                (station_match[self.mooring_measurement_date_col] <= pps_row['pps_expanded_end'])
+                (station_match[self.MOORING_DATE_COL] >= pps_row['pps_expanded_start']) &
+                (station_match[self.MOORING_DATE_COL] <= pps_row['pps_expanded_end'])
             ]
 
             if len(time_match) > 0:
@@ -318,8 +323,8 @@ class MooringAggregator(Aggregator):
                     result_row[col] = averaged_data[col]
 
                 # Add count of matched rows and mooring min/and max dates that matched to pps. Add the moor_station id column back in (this is just adding it back in, the pps and moor station cols were matched above)
-                result_row['moor_min_date'] = time_match[self.mooring_measurement_date_col].min()
-                result_row['moor_max_date'] = time_match[self.mooring_measurement_date_col].max()
+                result_row['moor_min_date'] = time_match[self.MOORING_DATE_COL].min()
+                result_row['moor_max_date'] = time_match[self.MOORING_DATE_COL].max()
                 result_row[self.MOORING_STATION_ID_COL] = pps_row[self.PPS_STATION_ID_COL]
                 result_row['moor_count_avg'] = len(time_match)
                     
@@ -356,7 +361,7 @@ class MooringAggregator(Aggregator):
 
         pps_df[self.PPS_UTC_START_TIME_COL] = pd.to_datetime(pps_df[self.PPS_UTC_START_TIME_COL])
         pps_df[self.PPS_UTC_END_TIME_COL] = pd.to_datetime(pps_df[self.PPS_UTC_END_TIME_COL])
-        ocean_model_df[ocean_model_time_col] = pd.to_datetime(ocean_model_df[ocean_model_time_col])
+        ocean_model_df[ocean_model_time_col] = pd.to_datetime(ocean_model_df[ocean_model_time_col]).dt.tz_localize('UTC')
 
         # Calculate the expanded time window for mooring data
         pps_df['pps_expanded_start'] = pps_df[self.PPS_UTC_START_TIME_COL] - pps_time_buffer
@@ -422,8 +427,8 @@ class MooringAggregator(Aggregator):
 
             # convert the aware datetime to UTC
             utc_dt = aware_dt.astimezone(pytz.utc)
-            formatted_string = utc_dt.strftime('%Y-%m-%d %H:%M:%S') 
-            return formatted_string
+            # formatted_string = utc_dt.strftime('%Y-%m-%d %H:%M:%S') 
+            return utc_dt
         except ValueError as e:
             print(f"Datetime of {sample_name} is {local_dt} and cannot be converted to UTC. {e}")
 

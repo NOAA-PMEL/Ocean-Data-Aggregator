@@ -10,8 +10,10 @@ import numpy as np
 
 class Aggregator:
     
-    PPS_START_DATE_COL = 'pps_sample_start_date' # the date column of the PPS df (this is created in the PpsTextFileProcessor)
-    PPS_END_DATE_COL = 'pps_sample_end_date'
+    PPS_LOCAL_START_DATE_COL = 'pps_sample_start_date' # the date column of the PPS df (this is created in the PpsTextFileProcessor)
+    PPS_LOCAL_END_DATE_COL = 'pps_sample_end_date'
+    PPS_UTC_START_TIME_COL = 'pps_utc_start_time' # Created in MooringAggregator in FINALmerge_quag_pps_mooring_oceanmodel()
+    PPS_UTC_END_TIME_COL = 'pps_utc_end_time_col' # Created in Mooring Aggregator in FINALmerge_quag_pps_mooring_oceanmodel()
     PPS_STATION_ID_COL = 'pps_station_id' # The name of the station_id col in the pps data (create in the PpstextFileProcessor)
     PPS_EVENT_NUM_COL = 'pps_event_number' # The name of the pps event_number col (create in the PpstextFileProcessor)
 
@@ -74,7 +76,7 @@ class Aggregator:
         half of the interval. So if interval is 10 minutes. Merging PPS data
         with times that fall between the start and end times plus 5 minutes
         """
-        durations = self.pps_df[self.PPS_END_DATE_COL] - self.pps_df[self.PPS_START_DATE_COL]
+        durations = self.pps_df[self.PPS_LOCAL_END_DATE_COL] - self.pps_df[self.PPS_LOCAL_START_DATE_COL]
         mean_durations = durations.mean()
         return mean_durations
 
@@ -91,12 +93,12 @@ class Aggregator:
             [self.quag_local_date_time_col, self.quag_site_col_name, self.quag_rosette_pos_col]
         )
         pps_df_sorted = self.pps_df.sort_values(
-            [self.PPS_START_DATE_COL, self.PPS_STATION_ID_COL, self.PPS_EVENT_NUM_COL]
+            [self.PPS_LOCAL_START_DATE_COL, self.PPS_STATION_ID_COL, self.PPS_EVENT_NUM_COL]
         )
 
         # Convert columns to the same types
         quag_df_sorted[self.quag_local_date_time_col] = pd.to_datetime(quag_df_sorted[self.quag_local_date_time_col])
-        pps_df_sorted[self.PPS_START_DATE_COL] = pd.to_datetime(pps_df_sorted[self.PPS_START_DATE_COL])
+        pps_df_sorted[self.PPS_LOCAL_START_DATE_COL] = pd.to_datetime(pps_df_sorted[self.PPS_LOCAL_START_DATE_COL])
         quag_df_sorted[self.quag_rosette_pos_col] = quag_df_sorted[self.quag_rosette_pos_col].astype(int)
         pps_df_sorted[self.PPS_EVENT_NUM_COL] = pps_df_sorted[self.PPS_EVENT_NUM_COL].astype(int)
         quag_df_sorted[self.quag_site_col_name] = quag_df_sorted[self.quag_site_col_name].astype(str)
@@ -106,7 +108,7 @@ class Aggregator:
             quag_df_sorted, 
             pps_df_sorted, 
             left_on = self.quag_local_date_time_col, 
-            right_on = self.PPS_START_DATE_COL, 
+            right_on = self.PPS_LOCAL_START_DATE_COL, 
             left_by = [self.quag_site_col_name, self.quag_rosette_pos_col],
             right_by = [self.PPS_STATION_ID_COL, self.PPS_EVENT_NUM_COL],
             direction = 'nearest',

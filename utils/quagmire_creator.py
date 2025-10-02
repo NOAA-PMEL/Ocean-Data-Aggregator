@@ -86,9 +86,9 @@ class QuagmireCreator:
                     local_date_time_combined=row[self.NEW_LOCAL_DATE_COMBO_COL], 
                     timezone=row[self.NEW_TIMEZONE_COL]), 
                     axis=1)
-                
-                mr_df[self.UTC_DATE_COL] = mr_df[self.NEW_UTC_DATE_COMBO_COL].str.split('T').str[0]
-                mr_df[self.UTC_TIME_COL] = mr_df[self.NEW_UTC_DATE_COMBO_COL].str.split('T').str[1].str.replace('Z', '')
+            
+            mr_df[self.UTC_DATE_COL] = mr_df[self.NEW_UTC_DATE_COMBO_COL].str.split('T').str[0]
+            mr_df[self.UTC_TIME_COL] = mr_df[self.NEW_UTC_DATE_COMBO_COL].str.split('T').str[1].str.replace('Z', '')
 
         return mr_df
 
