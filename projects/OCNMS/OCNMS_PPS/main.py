@@ -7,7 +7,7 @@ aggregator = MooringAggregator(config_yaml='/Users/zalmanek/Development/Ocean-Da
 
 final_df = aggregator.FINALmerge_quag_pps_mooring_oceanmodel()
 
-final_df.to_csv("/Users/zalmanek/Development/Ocean-Data-Aggregator/projects/OCNMS/OCNMS_PPS/output/FinalOME_Merge_OCNMS23to23PPS_fixed.csv", index=False)
+final_df.to_csv("/Users/zalmanek/Development/PMEL-OME-OCNMS/Brynn_OCNMS_data_reorganized/FinalOME_Merge_OCNMS23to23PPS_fixed.csv", index=False)
 
 
 

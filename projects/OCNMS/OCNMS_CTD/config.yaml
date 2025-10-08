@@ -1,33 +1,28 @@
 # Machine Readable File information - this is used to make the QAQC (AKA the Quagmire)
 machine_readable_info:
   machine_readable_files: 
-    - /Users/zalmanek/Documents/OCNMS_data_organized/CTD_data/2021_Aug_OCNMS_TH042/machineReadableFixed_OC0821.csv
-    - /Users/zalmanek/Documents/OCNMS_data_organized/CTD_data/2021_Oct_OCNMS_TH042/machineReadableFixed_OC1021.csv
-    - /Users/zalmanek/Documents/OCNMS_data_organized/CTD_data/2022_Aug_OCNMS_TH042/machineReadableFixed_OC0822.csv
-    - /Users/zalmanek/Documents/OCNMS_data_organized/CTD_data/2022_July_OCNMS_TH042/machineReadableFixed_OC0722.csv
-    - /Users/zalmanek/Documents/OCNMS_data_organized/CTD_data/2022_Jun_OCNMS_TH042/machineReadableFixed_OC0622.csv
-    - /Users/zalmanek/Documents/OCNMS_data_organized/CTD_data/2022_Sept_OCNMS_TH042/machineReadableFixed_OC0922.csv
-    - /Users/zalmanek/Documents/OCNMS_data_organized/CTD_data/2023_July_OCNMS_TH042/machineReadableFixed_OC0723.csv
-    - /Users/zalmanek/Documents/OCNMS_data_organized/CTD_data/2023_Jun_OCNMS_TH042/machineReadableFixed_OC0623.csv
+    - /Users/zalmanek/Development/PMEL-OME-OCNMS/Brynn_OCNMS_data_reorganized/CTD_data/2021_Aug_OCNMS_TH042/machineReadableFixed_OC0821.csv
+    - /Users/zalmanek/Development/PMEL-OME-OCNMS/Brynn_OCNMS_data_reorganized/CTD_data/2021_Oct_OCNMS_TH042/machineReadableFixed_OC1021.csv
+    - /Users/zalmanek/Development/PMEL-OME-OCNMS/Brynn_OCNMS_data_reorganized/CTD_data/2022_Aug_OCNMS_TH042/machineReadableFixed_OC0822.csv
+    - /Users/zalmanek/Development/PMEL-OME-OCNMS/Brynn_OCNMS_data_reorganized/CTD_data/2022_July_OCNMS_TH042/machineReadableFixed_OC0722.csv
+    - /Users/zalmanek/Development/PMEL-OME-OCNMS/Brynn_OCNMS_data_reorganized/CTD_data/2022_Jun_OCNMS_TH042/machineReadableFixed_OC0622.csv
+    - /Users/zalmanek/Development/PMEL-OME-OCNMS/Brynn_OCNMS_data_reorganized/CTD_data/2022_Sept_OCNMS_TH042/machineReadableFixed_OC0922.csv
+    - /Users/zalmanek/Development/PMEL-OME-OCNMS/Brynn_OCNMS_data_reorganized/CTD_data/2023_July_OCNMS_TH042/machineReadableFixed_OC0723.csv
+    - /Users/zalmanek/Development/PMEL-OME-OCNMS/Brynn_OCNMS_data_reorganized/CTD_data/2023_Jun_OCNMS_TH042/machineReadableFixed_OC0623.csv
   station_col: 'Cast_No.' # Must match what's in the ctd_data (This seems to vary - Station would be normal, but someimtes for Mooring/PPS it varies). Must be teh same for all the machine readable files
 
 # Mooring data 
 mooring_info: # Takes a list of .mat files (in case we want to aggregate a bunch together. Right now doing OCNMS 2021-2023)
-  mooring_data_dir: /Users/zalmanek/Documents/OCNMS_data_organized/mooring_data/
+  mooring_data_dir: /Users/zalmanek/Development/PMEL-OME-OCNMS/Brynn_OCNMS_data_reorganized/mooring_data/
   sensors: #  A list of sensors to grab data from (shoudl match the sensor name in the variables in the .mat files)
     - CTPO
 
 # NetCDF or .CNV info (AKA the CTD data) The directory where all the net cdf files live with the station_ids in the folder names and file names
 ctd_data:
   # net_cdf_dir: /Users/zalmanek/Development/PMEL-OME-OCNMS/Ella_combined_20250530/OCNMS_ctd_data_Ella/data/Olympic_Coast_National_Marine_Sanctuary_CTD_Data_2005_2023/netcdf_files/binned_profiles
-  cnv_dir: /Users/zalmanek/Documents/OCNMS_data_organized/CTD_data/
+  cnv_dir: /Users/zalmanek/Development/PMEL-OME-OCNMS/Brynn_OCNMS_data_reorganized/CTD_data/
   ctd_quag_merge_tolerance: '1.2 days' # should be in the form of 'pd.Timedelta('1h')'. The time tolerance to merge CTD and quagmire. Leave blank if just want to find closes datetime and have no tolerance range.
   julian_day_convention: '0 day' # Choose between either '0 day' or '1 day', meaning '0 day' = Day 1 starts on julian Day 0.0 (JD 1.0 is Jan 2nd). '1 day' = Day 1 starts at Julian Day 1.0 (JD=1.0 is January 1st)
-
-# # A list of all the applicable PPS txt files
-# pps_data:
-#   pps_txt_files_dir: /Users/zalmanek/Documents/ocnms_data/ocnms_pps_data # The directory where all the PPS data files live. Need to be all alone in there
-#   pps_event_col_name: pps_event_number # The name of the column for the event_number (to be used in mergin with quagmire)
 
 # Assumes will be .nc file right now. Setting up to take multiple files even though for OCNMS, only TH042 was used
 ocean_model_data:

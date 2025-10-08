@@ -7,7 +7,7 @@ from utils.mat_file_processor import MatFileProcessor
 mooring_aggregator = MooringAggregator(config_yaml='/Users/zalmanek/Development/Ocean-Data-Aggregator/projects/OCNMS/OCNMS_CTD/config.yaml')
 
 df = mooring_aggregator.FINALmerge_quag_ctd_mooring_oceanmodel()
-df.to_csv('/Users/zalmanek/Development/Ocean-Data-Aggregator/projects/OCNMS/OCNMS_CTD/output/FinalOME_Merge_OCNMS23to23CTD_fixed.csv', index=False)
+df.to_csv('/Users/zalmanek/Development/PMEL-OME-OCNMS/Brynn_OCNMS_data_reorganized/FinalOME_Merge_OCNMS23to23CTD_fixed.csv', index=False)
 
 ### Use to get .mat file as a csv
 # mat_processor = MatFileProcessor(mat_file="/Users/zalmanek/Documents/OCNMS_data_organized/mooring_data/2023.mat", sites=['TH042', 'CE042'], sensors=['CTPO'])

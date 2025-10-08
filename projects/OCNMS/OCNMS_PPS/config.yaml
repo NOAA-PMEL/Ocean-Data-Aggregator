@@ -1,23 +1,23 @@
 # Machine Readable File information - this is used to make the QAQC (AKA the Quagmire)
 machine_readable_info:
   machine_readable_files: 
-    - /Users/zalmanek/Documents/OCNMS_data_organized/PPS_data/2021_AugSept_OCNMS_CE042_PPS/machineReadableFixed_CE042-PPS-0821.csv
-    - /Users/zalmanek/Documents/OCNMS_data_organized/PPS_data/2021_AugSept_OCNMS_TH042_PPS/machineReadableFixed_TH042-PPS-0821.csv
-    - /Users/zalmanek/Documents/OCNMS_data_organized/PPS_data/2022_July_OCNMS_TH042_PPS/machineReadableFixed_TH042-PPS-0622.csv
-    - /Users/zalmanek/Documents/OCNMS_data_organized/PPS_data/2022_Sept_OCNMS_TH042_PPS/machineReadableFixed_TH042-PPS-0822.csv
-    - /Users/zalmanek/Documents/OCNMS_data_organized/PPS_data/2023_July_OCNMS_TH042_PPS/machineReadableFixed_TH042-PPS-0623.csv
+    - /Users/zalmanek/Development/PMEL-OME-OCNMS/Brynn_OCNMS_data_reorganized/PPS_data/2021_AugSept_OCNMS_CE042_PPS/machineReadableFixed_CE042-PPS-0821.csv
+    - /Users/zalmanek/Development/PMEL-OME-OCNMS/Brynn_OCNMS_data_reorganized/PPS_data/2021_AugSept_OCNMS_TH042_PPS/machineReadableFixed_TH042-PPS-0821.csv
+    - /Users/zalmanek/Development/PMEL-OME-OCNMS/Brynn_OCNMS_data_reorganized/PPS_data/2022_July_OCNMS_TH042_PPS/machineReadableFixed_TH042-PPS-0622.csv
+    - /Users/zalmanek/Development/PMEL-OME-OCNMS/Brynn_OCNMS_data_reorganized/PPS_data/2022_Sept_OCNMS_TH042_PPS/machineReadableFixed_TH042-PPS-0822.csv
+    - /Users/zalmanek/Development/PMEL-OME-OCNMS/Brynn_OCNMS_data_reorganized/PPS_data/2023_July_OCNMS_TH042_PPS/machineReadableFixed_TH042-PPS-0623.csv
   station_col: 'Cast_No.' # Must match what's in the ctd_data (This seems to vary - Station would be normal, but someimtes for Mooring/PPS it varies). Must be the same for all the machine readable files
   rosette_position_col: 'Rosette_position' # For pps data, would be where the "Event" number or "Port" number is
 
 # Mooring data 
 mooring_info: # Takes a list of .mat files (in case we want to aggregate a bunch together. Right now doing OCNMS 2021-2023)
-  mooring_data_dir: /Users/zalmanek/Documents/OCNMS_data_organized/mooring_data/
+  mooring_data_dir: /Users/zalmanek/Development/PMEL-OME-OCNMS/Brynn_OCNMS_data_reorganized/mooring_data/
   sensors: #  A list of sensors to grab data from (shoudl match the sensor name in the variables in the .mat files)
     - CTPO
 
 # A list of all the applicable PPS txt files
 pps_data:
-  pps_txt_files_dir: /Users/zalmanek/Documents/OCNMS_data_organized/PPS_data # The directory where all the PPS data files live. Need to be all alone in there
+  pps_txt_files_dir: /Users/zalmanek/Development/PMEL-OME-OCNMS/Brynn_OCNMS_data_reorganized/PPS_data/ # The directory where all the PPS data files live. Need to be all alone in there
 
 # Assumes will be .nc file right now. Setting up to take multiple files even though for OCNMS, only TH042 was used
 ocean_model_data:
