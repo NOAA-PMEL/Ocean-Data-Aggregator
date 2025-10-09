@@ -1,0 +1,40 @@
+# This is the config to use for regular ctd csv, bottle csv, and nutrient csv merges (all csvs)
+
+# Machine Readable File information - this is used to make the QAQC (AKA the Quagmire)
+machine_readable_info:
+  machine_readable_files: 
+    - /Users/zalmanek/Development/OME-EcoFOCI/EcoFOCI/data/1_SampleCollection/2023_EcoFociSpringMooring_CruiseData/MachineReadable_CruiseSampleMetadata_DY23-06_zjg_20250626.csv
+  station_col: Cast # Needs to be Cast for some reason - TODO: check in code and fix.
+  lat_dir: 'N' # If the direction is missing from the lat/lon coordinates add here (should be just N, W, S, E)
+  lon_dir: 'W'
+
+# ctd_data:
+#   ctd_csv: 
+#   header_row: 
+#   unit_row:
+#   pressure_col_name: 
+#   cast_num_col_name: 
+#   cast_val_str_to_remove: 
+#     -  # A common string to remove in the cast_num_col_name values to be able to get just the integer. Can have multiple
+#   group_by_cols_to_average: # Use if there are duplicates for cast/pressure combo (CTD will be merged with Bottle on these columns), and find average across numeric columns
+   
+bottle_data:
+  bottle_csv: /Users/zalmanek/Development/OME-EcoFOCI/EcoFOCI/data/1_SampleCollection/2023_EcoFociSpringMooring_CruiseData/CTD_raw_BottleFile_DY23-06.csv
+  header_row: 0
+  unit_row: 
+  pressure_col_name: 'pressure (decibar)'
+  cast_num_col_name: profile_id 
+  cast_val_str_to_remove:  # A common string to remove in the cast_num_col_name values to be able to get just the integer. CAn have multiple
+    - DY2306c
+    - _btl
+  bottle_num_col_name: bottle
+  group_by_cols_to_average: 
+
+nutrient_data:
+  nutrient_csv: /Users/zalmanek/Development/OME-EcoFOCI/EcoFOCI/data/1_SampleCollection/2023_EcoFociSpringMooring_CruiseData/dy2306_hy1_nutrients.csv
+  header_row: 1
+  unit_row: 2
+  pressure_col_name: CTDPRS
+  cast_num_col_name: STNNBR
+  cast_val_str_to_remove:
+  group_by_cols_to_average:

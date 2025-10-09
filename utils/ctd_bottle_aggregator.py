@@ -9,23 +9,26 @@ class CtdBottleAggregator(Aggregator):
         super().__init__(config_yaml)
 
         # CTD data
-        self.ctd_file_info = self.config_file.get('ctd_data', None)
-        self.ctd_cast_col_name = self.ctd_file_info.get('cast_num_col_name', None)
-        self.ctd_pressure_col_name = self.ctd_file_info.get('pressure_col_name', None)
-        self.ctd_df = self.get_ctd_df_from_csv()
+        if 'ctd_data' in self.config_file:
+            self.ctd_file_info = self.config_file.get('ctd_data', None)
+            self.ctd_cast_col_name = self.ctd_file_info.get('cast_num_col_name', None)
+            self.ctd_pressure_col_name = self.ctd_file_info.get('pressure_col_name', None)
+            self.ctd_df = self.get_ctd_df_from_csv()
 
         # Bottle data
-        self.btl_file_info = self.config_file.get('bottle_data')
-        self.btl_cast_col_name = self.btl_file_info.get('cast_num_col_name', None)
-        self.btl_pressure_col_name = self.btl_file_info.get('pressure_col_name', None)
-        self.btl_bottle_col_name = self.btl_file_info.get('bottle_num_col_name', None)
-        self.btl_df = self.get_btl_df_from_csv()
+        if 'bottle_data' in self.config_file:
+            self.btl_file_info = self.config_file.get('bottle_data', None)
+            self.btl_cast_col_name = self.btl_file_info.get('cast_num_col_name', None)
+            self.btl_pressure_col_name = self.btl_file_info.get('pressure_col_name', None)
+            self.btl_bottle_col_name = self.btl_file_info.get('bottle_num_col_name', None)
+            self.btl_df = self.get_btl_df_from_csv()
 
         # Nutrient data
-        self.nutr_file_info = self.config_file.get('nutrient_data')
-        self.nutr_cast_col_name = self.nutr_file_info.get('cast_num_col_name', None)
-        self.nutr_pressure_col_name = self.nutr_file_info.get('pressure_col_name', None)
-        self.nutr_df = self.get_nutrient_df_from_csv()
+        if 'nutrient_data' in self.config_file:
+            self.nutr_file_info = self.config_file.get('nutrient_data', None)
+            self.nutr_cast_col_name = self.nutr_file_info.get('cast_num_col_name', None)
+            self.nutr_pressure_col_name = self.nutr_file_info.get('pressure_col_name', None)
+            self.nutr_df = self.get_nutrient_df_from_csv()
 
         # Update column names (since units and prefixes get added to them)
         self.update_attribute_cols()
@@ -51,6 +54,19 @@ class CtdBottleAggregator(Aggregator):
 
         return final_df
 
+    def FINALmerge_quag_btl_nutrient(self) -> pd.DataFrame:
+        """
+        Merges the quag with the bottle on Cast number and bottle number.
+        Then merges the nutrient data with output df on Cast and presser/depth
+        """
+        # Step 1 Merge quag and btl data frames on cast and rosette/bottle number
+        quag_btl_combined = self.merge_quag_OtherBottleDf_on_cast_rosette(df=self.btl_df)
+
+        # Step 2 Merge quag_btl_combined with nutrient on cast and depth/pressure
+        final_df = self.merge_OtherQuagDf_nutr_on_cast_nearest_depth(df=quag_btl_combined)
+
+        return final_df
+    
     def get_ctd_df_from_csv(self) -> pd.DataFrame:
         """
         Get the ctd df and prepend columns with ctd_
@@ -110,20 +126,23 @@ class CtdBottleAggregator(Aggregator):
         for rosette/bottle/cast to int.
         """
         # ctd_data
-        ctd_cols = [col.replace('ctd_', '') for col in self.ctd_df.columns]
-        self.ctd_cast_col_name = self.find_matching_col(old_col_name=self.ctd_cast_col_name, new_cols=ctd_cols, prefix='ctd_')
-        self.ctd_pressure_col_name = self.find_matching_col(old_col_name=self.ctd_pressure_col_name, new_cols=ctd_cols, prefix='ctd_')
+        if 'ctd_data' in self.config_file:
+            ctd_cols = [col.replace('ctd_', '') for col in self.ctd_df.columns]
+            self.ctd_cast_col_name = self.find_matching_col(old_col_name=self.ctd_cast_col_name, new_cols=ctd_cols, prefix='ctd_')
+            self.ctd_pressure_col_name = self.find_matching_col(old_col_name=self.ctd_pressure_col_name, new_cols=ctd_cols, prefix='ctd_')
 
         # Bottle data
-        btl_cols = [col.replace('btl_', '') for col in self.btl_df.columns]
-        self.btl_cast_col_name = self.find_matching_col(old_col_name=self.btl_cast_col_name, new_cols=btl_cols, prefix='btl_')
-        self.btl_pressure_col_name = self.find_matching_col(old_col_name=self.btl_pressure_col_name, new_cols=btl_cols, prefix='btl_')
-        self.btl_bottle_col_name = self.find_matching_col(old_col_name=self.btl_bottle_col_name, new_cols=btl_cols, prefix='btl_')
+        if 'bottle_data' in self.config_file:
+            btl_cols = [col.replace('btl_', '') for col in self.btl_df.columns]
+            self.btl_cast_col_name = self.find_matching_col(old_col_name=self.btl_cast_col_name, new_cols=btl_cols, prefix='btl_')
+            self.btl_pressure_col_name = self.find_matching_col(old_col_name=self.btl_pressure_col_name, new_cols=btl_cols, prefix='btl_')
+            self.btl_bottle_col_name = self.find_matching_col(old_col_name=self.btl_bottle_col_name, new_cols=btl_cols, prefix='btl_')
 
         # Nutrient data
-        nutr_cols = [col.replace('nutr_', '') for col in self.nutr_df.columns]
-        self.nutr_cast_col_name = self.find_matching_col(old_col_name=self.nutr_cast_col_name, new_cols=nutr_cols, prefix='nutr_')
-        self.nutr_pressure_col_name = self.find_matching_col(old_col_name=self.nutr_pressure_col_name, new_cols=nutr_cols, prefix='nutr_')
+        if 'nutrient_data' in self.config_file:
+            nutr_cols = [col.replace('nutr_', '') for col in self.nutr_df.columns]
+            self.nutr_cast_col_name = self.find_matching_col(old_col_name=self.nutr_cast_col_name, new_cols=nutr_cols, prefix='nutr_')
+            self.nutr_pressure_col_name = self.find_matching_col(old_col_name=self.nutr_pressure_col_name, new_cols=nutr_cols, prefix='nutr_')
 
         # Update col dtypes for cast/rosette/btle
         self.update_cast_bottle_roseette_col_dtypes()
@@ -142,17 +161,17 @@ class CtdBottleAggregator(Aggregator):
         """
 
         # Nutrient
-        if self.nutr_file_info:
+        if 'nutrient_data' in self.config_file:
             self.nutr_df[self.nutr_cast_col_name] = self.nutr_df[self.nutr_cast_col_name].astype('Int64')
             self.nutr_df[self.nutr_pressure_col_name] = self.nutr_df[self.nutr_pressure_col_name].astype(float)
 
         # Bottle
-        if self.btl_file_info:
+        if 'bottle_data' in self.config_file:
             self.btl_df[self.btl_cast_col_name] = self.btl_df[self.btl_cast_col_name].astype('Int64')
             self.btl_df[self.btl_bottle_col_name] = self.btl_df[self.btl_bottle_col_name].astype(float).astype('Int64')
 
         # CTD
-        if self.ctd_file_info:
+        if 'ctd_data' in self.config_file:
             self.ctd_df[self.ctd_cast_col_name] = self.ctd_df[self.ctd_cast_col_name].astype('Int64')
 
     def merge_bottle_ctd_on_cast_pressure(self) -> pd.DataFrame:

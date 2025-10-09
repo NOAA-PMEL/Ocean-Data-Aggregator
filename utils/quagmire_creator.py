@@ -6,6 +6,8 @@ from datetime import datetime
 from zoneinfo import ZoneInfo
 import numpy as np
 
+# TODO: Figure out logic in edit_dates() method to to account for if local date/tims exiest and utc doesn't and if utc date/times exist and local
+# doesn't
 class QuagmireCreator:
     """
     Creates the QAQC file from the MachineReadable File. Edits things like dates and longitude and latitude
@@ -29,9 +31,11 @@ class QuagmireCreator:
     NEW_LAT_DEC_DEG_COL = 'Lat_dec'
     NEW_LON_DEC_DEG_COL = 'Lon_dec'
 
-    def __init__(self, machine_readable_files: list, station_col: str):
+    def __init__(self, machine_readable_files: list, station_col: str, lat_dir: str = None, lon_dir: str = None):
 
         self.station_col = station_col
+        self.lat_dir = lat_dir
+        self.lon_dir = lon_dir
         self.machine_readable_files = machine_readable_files
         self.quagmire_df = self.process_mr_file()
         self.quag_min_date, self.quag_max_date = self.get_quag_min_and_max_dates()
@@ -57,7 +61,7 @@ class QuagmireCreator:
         mr_df_dates_updated = self.edit_dates(mr_df=mr_df_lat_lon_updated)
 
         # Update Rosette_position column
-        mr_df_rosette_updated = self.clean_rosette_position(df=mr_df_dates_updated)
+        mr_df_rosette_updated = self.clean_rosette_position_and_cast(df=mr_df_dates_updated)
 
         return mr_df_rosette_updated
     
@@ -84,6 +88,13 @@ class QuagmireCreator:
             local_date_time_combined=row[self.NEW_LOCAL_DATE_COMBO_COL], 
             timezone=row[self.NEW_TIMEZONE_COL]),
         axis=1)
+
+        # creates UTC combo data/time col based on utc time/local cols
+        mr_df[self.NEW_UTC_DATE_COMBO_COL] = mr_df.apply(lambda row: self.combine_dates_and_times(
+            date = row[self.UTC_DATE_COL],
+            time = row[self.UTC_TIME_COL])
+            if pd.notna(row[self.UTC_DATE_COL]) and pd.notna(row[self.UTC_TIME_COL]) else None, # Explicitly return None if either is missing
+        axis=1)
             
         # Replaces any utc date or utc time with updated utc date time calculated from local times
         # mr_df[self.UTC_DATE_COL] = mr_df[self.NEW_UTC_DATE_COMBO_COL].fillna('').str.split('T').str[0]
@@ -96,15 +107,20 @@ class QuagmireCreator:
         Convert the latitude and longitude to decimal degrees. Right now only have function that will convert from this format 47˚ 52.467' N
         """
         try:
-            mr_df[self.NEW_LAT_DEC_DEG_COL] = mr_df[self.MR_OG_LAT_COL].apply(self.get_coord_dec_degree_from_deg_min)
-            mr_df[self.NEW_LON_DEC_DEG_COL] = mr_df[self.MR_OG_LON_COL].apply(self.get_coord_dec_degree_from_deg_min)
+            mr_df[self.NEW_LAT_DEC_DEG_COL] = mr_df[self.MR_OG_LAT_COL].apply(lambda coord_str: self.get_coord_dec_degree_from_deg_min(
+                coord_str=coord_str, coord_type='lat'
+            ))
+            mr_df[self.NEW_LON_DEC_DEG_COL] = mr_df[self.MR_OG_LON_COL].apply(lambda coord_str: self.get_coord_dec_degree_from_deg_min(
+                coord_str=coord_str, coord_type='lon'
+            ))
             return mr_df
         except ValueError as e: # TODO: update to try other formats if doesn't work
             raise ValueError(e)
 
-    def get_coord_dec_degree_from_deg_min(self, coord_str) -> float:
+    def get_coord_dec_degree_from_deg_min(self, coord_str, coord_type: str) -> float:
         """
         Converts a coordinate from Degrees, Mintues, Decimal Minutes to Decimal Degrees. E.g. -> 47˚ 52.467' N to 47.87445 
+        coord_type should be 'lat' or 'lon'
         """
         # Return None if nan value
         if pd.isna(coord_str):
@@ -116,7 +132,14 @@ class QuagmireCreator:
         if not coord_str:
             return None
         
-        pattern = r"(\d+)[˚]\s*(\d+\.?\d*)['\s]*([NSEW])"
+        # If coordinates are missing then add in the direction
+        if not coord_str.endswith(('N', 'S', 'E', 'W')):
+            if coord_type == 'lat':
+                coord_str = f"{coord_str} {self.lat_dir}"
+            else:
+                coord_str = f"{coord_str} {self.lon_dir}"
+        
+        pattern = r"(\d+)°\s*(\d+\.?\d*)\s*'\s*([NSEW])"
         match = re.match(pattern, coord_str.strip())
 
         if not match:
@@ -220,10 +243,11 @@ class QuagmireCreator:
 
         return min_depth, max_depth
     
-    def clean_rosette_position(self, df: pd.DataFrame) -> pd.DataFrame:
-        """Remove any letters from Rosette_position column. So if 'Port 1' will just be 1"""
-        df[self.ROSETTE_POS_COL] = df[self.ROSETTE_POS_COL].astype(str)
-        df[self.ROSETTE_POS_COL] = df[self.ROSETTE_POS_COL].str.extract(r'(\d+)', expand=False)
+    def clean_rosette_position_and_cast(self, df: pd.DataFrame) -> pd.DataFrame:
+        """Remove any letters from Rosette_position or cast column. So if 'Port 1' will just be 1"""
+        cols_to_process = [self.ROSETTE_POS_COL, self.CAST_COL]
+        df[cols_to_process] = df[cols_to_process].astype(str)
+        df[cols_to_process] = df[cols_to_process].apply(lambda x: x.str.extract(r'(\d+)', expand=False), axis=0)
         return df
     
     def update_quag_cast_bottle_cols_dtype(self):

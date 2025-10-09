@@ -23,7 +23,9 @@ class Aggregator:
 
         # quagmire updated
         self.quagmire_creator = QuagmireCreator(machine_readable_files=self.config_file['machine_readable_info']['machine_readable_files'],
-                                                station_col=self.config_file['machine_readable_info']['station_col'])
+                                                station_col=self.config_file['machine_readable_info']['station_col'],
+                                                lat_dir=self.config_file['machine_readable_info'].get('lat_dir', None),
+                                                lon_dir=self.config_file['machine_readable_info'].get('lon_dir', None))
         self.quagmire_df = self.quagmire_creator.quagmire_df
         self.quag_utc_date_time_col = self.quagmire_creator.NEW_UTC_DATE_COMBO_COL
         self.quag_local_date_time_col = self.quagmire_creator.NEW_LOCAL_DATE_COMBO_COL
