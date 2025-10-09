@@ -4,6 +4,7 @@ import pytz
 from timezonefinder import TimezoneFinder
 from datetime import datetime
 from zoneinfo import ZoneInfo
+import numpy as np
 
 class QuagmireCreator:
     """
@@ -37,6 +38,9 @@ class QuagmireCreator:
         self.quag_min_depth, self.quag_max_depth = self.get_quag_min_and_max_depths()
         self.quag_station_sites = self.quagmire_df[self.station_col].unique().tolist()
 
+        # update cast and rosette postiion data types to Int64
+        self.update_quag_cast_bottle_cols_dtype()
+
     def process_mr_file(self) -> pd.DataFrame:
 
         # Append all machine readable dfs together
@@ -62,33 +66,28 @@ class QuagmireCreator:
         Edit the dates in the Machine Readable df (mr_df) to update for local or UTC time, depending on what is missing
         """
 
-        # Get timezone for each row
+        # Get timezone for each row based on latittude and longitude
         mr_df[self.NEW_TIMEZONE_COL] = mr_df.apply(lambda row: self.get_the_timzone_by_lat_lon(
             lat=row[self.NEW_LAT_DEC_DEG_COL], lon=row[self.NEW_LON_DEC_DEG_COL]), axis=1)
 
 
-        ### THIS BLOCK OF CODE check to see if all the local time and local dates are filled out and if they are, then creates a combined_local_date
-        # column, it then checks fall the utc date OR the utc time columns are empty, and if tone of them is empty, it calculates the combined_utc_date/time from
-        # the local date. This overrides any UTC date/times that already exist in the mr_df with the calculated from the local. Not sure if for some reason this
-        # wouldn't be okay? 
-        if not mr_df[self.LOCAL_DATE_COL].isnull().any() and not mr_df[self.LOCAL_TIME_COL].isnull().any():
-            # create a local_date_combined_col
-            mr_df[self.NEW_LOCAL_DATE_COMBO_COL] = mr_df.apply(lambda row: self.combine_dates_and_times(
-                date=row[self.LOCAL_DATE_COL], 
-                time=row[self.LOCAL_TIME_COL]), 
-                axis=1)
+        # Create local combined date column by the local date and local time columns. 
+        mr_df[self.NEW_LOCAL_DATE_COMBO_COL] = mr_df.apply(lambda row: self.combine_dates_and_times(
+            date=row[self.LOCAL_DATE_COL], 
+            time=row[self.LOCAL_TIME_COL])
+            if pd.notna(row[self.LOCAL_DATE_COL]) and pd.notna(row[self.LOCAL_TIME_COL]) else None, # Explicitly return None if either is missing
+        axis=1)
         
-            # If UTC time or UTC date is empty for all rows, use local time/date to get UCT time:
-            if mr_df[self.UTC_TIME_COL].isnull().all() or mr_df[self.UTC_DATE_COL].isnull().all():
-                # Get a series of tuples
-                mr_df[self.NEW_UTC_DATE_COMBO_COL] = mr_df.apply(
-                    lambda row: self.convert_local_time_to_utc(
-                    local_date_time_combined=row[self.NEW_LOCAL_DATE_COMBO_COL], 
-                    timezone=row[self.NEW_TIMEZONE_COL]), 
-                    axis=1)
+        # creates UTC combo date/time col based on new combo local date/time col
+        mr_df[self.NEW_UTC_DATE_COMBO_COL] = mr_df.apply(
+            lambda row: self.convert_local_time_to_utc(
+            local_date_time_combined=row[self.NEW_LOCAL_DATE_COMBO_COL], 
+            timezone=row[self.NEW_TIMEZONE_COL]),
+        axis=1)
             
-            mr_df[self.UTC_DATE_COL] = mr_df[self.NEW_UTC_DATE_COMBO_COL].str.split('T').str[0]
-            mr_df[self.UTC_TIME_COL] = mr_df[self.NEW_UTC_DATE_COMBO_COL].str.split('T').str[1].str.replace('Z', '')
+        # Replaces any utc date or utc time with updated utc date time calculated from local times
+        # mr_df[self.UTC_DATE_COL] = mr_df[self.NEW_UTC_DATE_COMBO_COL].fillna('').str.split('T').str[0]
+        # mr_df[self.UTC_TIME_COL] = mr_df[self.NEW_UTC_DATE_COMBO_COL].fillna('').str.split('T').str[1].str.replace('Z', '')
 
         return mr_df
 
@@ -107,6 +106,16 @@ class QuagmireCreator:
         """
         Converts a coordinate from Degrees, Mintues, Decimal Minutes to Decimal Degrees. E.g. -> 47˚ 52.467' N to 47.87445 
         """
+        # Return None if nan value
+        if pd.isna(coord_str):
+            return None
+        
+        coord_str = str(coord_str).strip()
+
+        # If coord_str is an empty string return None
+        if not coord_str:
+            return None
+        
         pattern = r"(\d+)[˚]\s*(\d+\.?\d*)['\s]*([NSEW])"
         match = re.match(pattern, coord_str.strip())
 
@@ -127,6 +136,10 @@ class QuagmireCreator:
         """
         Finds the time zone by latitude and longitude
         """
+        # If lat/lon is nan or empty strings, return None
+        if pd.isna(lat) or pd.isna(lon) or not lat or not lon:
+            return None
+        
         tf = TimezoneFinder()
         tz = tf.timezone_at(lng=lon, lat=lat)
         if tz is None:
@@ -137,14 +150,23 @@ class QuagmireCreator:
         """
         Combine a date and a time into one str formated for ISO
         """
-
-        # If date in format like '6/15/2023' and time like 14:30 so '%m/%d/%Y %H:%M'
+        if pd.isna(date) or pd.isna(time) or not date or not time:
+            return None
+       
+        # 1. Format: MM/DD/YYYY HH:MM (Four-digit year)
+        # Example: '6/15/2023 14:30'
         if '/' in date and len(time.split(':')) == 2 and len(date.split('/')[2]) == 4:
             combined_str = f"{date} {time}"
             datetime_obj = datetime.strptime(combined_str, '%m/%d/%Y %H:%M')
-            iso_format_str = datetime_obj.isoformat()
+            return datetime_obj.isoformat()
+        
+        # 2. Format: MM/DD/YY HH:MM (Two-digit year) - FIX FOR YOUR DATA
+         # Example: '11/8/21 13:04'
+        elif '/' in date and len(time.split(':')) == 2 and len(date.split('/')[2]) == 2:
+            combined_str = f"{date} {time}"
+            datetime_obj = datetime.strptime(combined_str, '%m/%d/%y %H:%M') # Use %y
+            return datetime_obj.isoformat()
 
-            return iso_format_str
         else:
             raise ValueError(f"The dates and times do not matcha format that we currently account for in the combine_dates_and_times function! Please add functionlity!")
 
@@ -152,14 +174,19 @@ class QuagmireCreator:
         """
         Converts a local datetime to utc time and returns the 1) combined date/time, 2) just the date, 3) just the time.
         """
+        if pd.isna(local_date_time_combined) or not local_date_time_combined:
+            return np.nan # Must return nan for get_quag_min_max_dates to work.
+        
         local_tz = pytz.timezone(timezone)
         local_dt_naive = datetime.fromisoformat(local_date_time_combined)
 
         # locallize the datetime object with the timezone found
         local_dt_aware = local_tz.localize(local_dt_naive)
+        # print(f"local: {local_dt_aware}")
 
         # Convert the localized datetime to UTC
         utc_dt_aware = local_dt_aware.astimezone(pytz.utc)
+        # print(utc_dt_aware)
 
         # The Full ISO date/time
         iso_format_with_Z = utc_dt_aware.strftime('%Y-%m-%dT%H:%M:%SZ')
@@ -199,3 +226,10 @@ class QuagmireCreator:
         df[self.ROSETTE_POS_COL] = df[self.ROSETTE_POS_COL].str.extract(r'(\d+)', expand=False)
         return df
     
+    def update_quag_cast_bottle_cols_dtype(self):
+        """
+        Update the quag cast bottle column data types to int64, and depth to float
+        """
+        self.quagmire_df[self.CAST_COL] = self.quagmire_df[self.CAST_COL].astype('Int64')
+        self.quagmire_df[self.ROSETTE_POS_COL] = self.quagmire_df[self.ROSETTE_POS_COL].astype('Int64')
+        self.quagmire_df[self.DEPTH_COL] = self.quagmire_df[self.DEPTH_COL].astype(float)

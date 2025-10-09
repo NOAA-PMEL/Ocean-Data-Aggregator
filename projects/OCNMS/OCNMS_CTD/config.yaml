@@ -1,3 +1,5 @@
+# This is the config to use for Mooring/CTD merges. CTD file can be .cnv or .nc
+
 # Machine Readable File information - this is used to make the QAQC (AKA the Quagmire)
 machine_readable_info:
   machine_readable_files: 

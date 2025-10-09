@@ -36,6 +36,8 @@ class Aggregator:
         self.quag_rosette_pos_col = self.quagmire_creator.ROSETTE_POS_COL
         self.quag_local_time_zone_col = self.quagmire_creator.NEW_TIMEZONE_COL
         self.quag_sample_name_col = self.quagmire_creator.SAMPLE_NAME_COL
+        self.quag_cast_col = self.quagmire_creator.CAST_COL
+        self.quag_depth_col = self.quagmire_creator.DEPTH_COL
         
         # pps info - Optional
         if self.config_file.get('pps_data', None):
