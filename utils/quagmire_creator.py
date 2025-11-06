@@ -22,7 +22,7 @@ class QuagmireCreator:
     CAST_COL = 'Cast'
     ROSETTE_POS_COL = 'Rosette_position'
     DEPTH_COL = 'Depth_m'
-    SAMPLE_NAME_COL = 'Sample_Name'
+    SAMPLE_NAME_COL = 'FINAL Sample NAME'
     
     # New columns created in this class
     NEW_TIMEZONE_COL = 'local_timezone'
@@ -51,9 +51,14 @@ class QuagmireCreator:
         mr_dfs = []
         for file in self.machine_readable_files:
             df = pd.read_csv(file)
+
+            # If the cast column is named 'Cast_No.' change to cast
+            if 'Cast_No.' in df.columns:
+                df.rename(columns={'Cast_No.': self.CAST_COL}, inplace=True)
+            
             mr_dfs.append(df)
         mr_df = pd.concat(mr_dfs, ignore_index=True)
-        
+
         # get lat/lon in decimal degrees
         mr_df_lat_lon_updated = self.convert_lat_lon_coords(mr_df=mr_df)
     
@@ -67,7 +72,8 @@ class QuagmireCreator:
     
     def edit_dates(self, mr_df: pd.DataFrame) -> pd.DataFrame:
         """
-        Edit the dates in the Machine Readable df (mr_df) to update for local or UTC time, depending on what is missing
+        Edit the dates in the Machine Readable df (mr_df) to create a UTC Date combined for Local Date
+        TODO: Need to add for other case when need to find local from UTC maybe?
         """
 
         # Get timezone for each row based on latittude and longitude
@@ -88,17 +94,10 @@ class QuagmireCreator:
             local_date_time_combined=row[self.NEW_LOCAL_DATE_COMBO_COL], 
             timezone=row[self.NEW_TIMEZONE_COL]),
         axis=1)
-
-        # creates UTC combo data/time col based on utc time/local cols
-        mr_df[self.NEW_UTC_DATE_COMBO_COL] = mr_df.apply(lambda row: self.combine_dates_and_times(
-            date = row[self.UTC_DATE_COL],
-            time = row[self.UTC_TIME_COL])
-            if pd.notna(row[self.UTC_DATE_COL]) and pd.notna(row[self.UTC_TIME_COL]) else None, # Explicitly return None if either is missing
-        axis=1)
             
         # Replaces any utc date or utc time with updated utc date time calculated from local times
-        # mr_df[self.UTC_DATE_COL] = mr_df[self.NEW_UTC_DATE_COMBO_COL].fillna('').str.split('T').str[0]
-        # mr_df[self.UTC_TIME_COL] = mr_df[self.NEW_UTC_DATE_COMBO_COL].fillna('').str.split('T').str[1].str.replace('Z', '')
+        mr_df[self.UTC_DATE_COL] = mr_df[self.NEW_UTC_DATE_COMBO_COL].fillna('').str.split('T').str[0]
+        mr_df[self.UTC_TIME_COL] = mr_df[self.NEW_UTC_DATE_COMBO_COL].fillna('').str.split('T').str[1].str.replace('Z', '')
 
         return mr_df
 
@@ -139,11 +138,11 @@ class QuagmireCreator:
             else:
                 coord_str = f"{coord_str} {self.lon_dir}"
         
-        pattern = r"(\d+)°\s*(\d+\.?\d*)\s*'\s*([NSEW])"
+        pattern = r"(\d+)[°˚]\s*(\d+\.?\d*)\s*'\s*([NSEW])"
         match = re.match(pattern, coord_str.strip())
 
         if not match:
-            raise ValueError("Invalid coordinate format")
+            raise ValueError(f"Invalid coordinate format: {coord_str}")
         
         degrees = float(match.group(1))
         minutes = float(match.group(2))
@@ -245,7 +244,11 @@ class QuagmireCreator:
     
     def clean_rosette_position_and_cast(self, df: pd.DataFrame) -> pd.DataFrame:
         """Remove any letters from Rosette_position or cast column. So if 'Port 1' will just be 1"""
-        cols_to_process = [self.ROSETTE_POS_COL, self.CAST_COL]
+        # Need to add this because some of the OCNMS cruises use the cast column as the station column. For others, they should be different.
+        cols_to_process = [self.ROSETTE_POS_COL]
+        if self.CAST_COL != self.station_col:
+            cols_to_process.append(self.CAST_COL)
+
         df[cols_to_process] = df[cols_to_process].astype(str)
         df[cols_to_process] = df[cols_to_process].apply(lambda x: x.str.extract(r'(\d+)', expand=False), axis=0)
         return df
@@ -254,6 +257,7 @@ class QuagmireCreator:
         """
         Update the quag cast bottle column data types to int64, and depth to float
         """
-        self.quagmire_df[self.CAST_COL] = self.quagmire_df[self.CAST_COL].astype('Int64')
+        if self.CAST_COL != self.station_col:
+            self.quagmire_df[self.CAST_COL] = self.quagmire_df[self.CAST_COL].astype('Int64')
         self.quagmire_df[self.ROSETTE_POS_COL] = self.quagmire_df[self.ROSETTE_POS_COL].astype('Int64')
         self.quagmire_df[self.DEPTH_COL] = self.quagmire_df[self.DEPTH_COL].astype(float)

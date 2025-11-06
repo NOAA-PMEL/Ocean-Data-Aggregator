@@ -6,7 +6,7 @@ machine_readable_info:
     - /Users/zalmanek/Development/PMEL-OME-OCNMS/Brynn_OCNMS_data_reorganized/PPS_data/2022_July_OCNMS_TH042_PPS/machineReadableFixed_TH042-PPS-0622.csv
     - /Users/zalmanek/Development/PMEL-OME-OCNMS/Brynn_OCNMS_data_reorganized/PPS_data/2022_Sept_OCNMS_TH042_PPS/machineReadableFixed_TH042-PPS-0822.csv
     - /Users/zalmanek/Development/PMEL-OME-OCNMS/Brynn_OCNMS_data_reorganized/PPS_data/2023_July_OCNMS_TH042_PPS/machineReadableFixed_TH042-PPS-0623.csv
-  station_col: 'Cast_No.' # Must match what's in the ctd_data (This seems to vary - Station would be normal, but someimtes for Mooring/PPS it varies). Must be the same for all the machine readable files
+  station_col: 'Cast' # Must match what's in the ctd_data (This seems to vary - Station would be normal, but someimtes for Mooring/PPS it varies). Must be the same for all the machine readable files
   rosette_position_col: 'Rosette_position' # For pps data, would be where the "Event" number or "Port" number is
 
 # Mooring data 

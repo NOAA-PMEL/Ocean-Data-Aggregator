@@ -2,6 +2,7 @@ from utils.aggregator import Aggregator
 from utils.mat_file_processor import MatFileProcessor
 from utils.netcdf_processor import NetcdfProcessor
 from utils.cnv_processor import CnvProcessor
+from utils.ros_processor import RosProcessor
 from pathlib import Path
 import pandas as pd
 import numpy as np
@@ -38,12 +39,17 @@ class MooringAggregator(Aggregator):
                 self.ctd_cnv_file_directory = Path(self.config_file['ctd_data']['cnv_dir'])
                 self.ctd_day_convention = self.config_file['ctd_data']['julian_day_convention']
                 self.ctd_df = self.convert_ctd_cnv_files_to_df()
+            elif self.config_file['ctd_data'].get('ros_dir', None):
+                self.ctd_ros_file_directory = Path(self.config_file['ctd_data']['ros_dir'])
+                self.ctd_day_convention = self.config_file['ctd_data']['julian_day_convention']
+                self.ctd_df = self.convert_ctd_ros_files_to_df()
 
         # For Ocean model data (.NC file)
         self.model_data_files = self.config_file['ocean_model_data']['model_nc_files']
         self.ocean_model_depth_var = self.config_file['ocean_model_data']['depth_variable_name']
         self.ocean_model_time_dim_name = self.config_file['ocean_model_data']['time_dim_name']
         self.ocean_model_df = self.convert_ocean_model_nc_to_df()
+        self.ocean_model_df.to_csv('model.csv')
 
     def FINALmerge_quag_pps_mooring_oceanmodel(self):
         """
@@ -172,6 +178,24 @@ class MooringAggregator(Aggregator):
         df_cleaned = df.dropna(axis=1, how='all')
         return df_cleaned
     
+    def convert_ctd_ros_files_to_df(self) -> pd.DataFrame:
+        """
+        Converts all the associated .ros files in the config.yaml into a data frame. Concats them all
+        together to return one dataframe. Assumes the ctd files are all in the same directory
+        """
+        all_ros_files = list(self.ctd_ros_file_directory.rglob('*.ros'))
+
+        ros_dfs = []
+        for ros_file in all_ros_files:
+            ros_processor = RosProcessor(ros_file=ros_file, sites=self.quag_station_sites, day_convention=self.ctd_day_convention)
+            ros_df = ros_processor.ros_df
+            ros_dfs.append(ros_df)
+        
+        df = pd.concat(ros_dfs, ignore_index=False)
+        df = df.add_prefix('ctd_')
+        df_cleaned = df.dropna(axis=1, how='all')
+        return df_cleaned
+    
     def merge_ctd_quag_on_station_utctime(self, quag_df: pd.DataFrame, tolerance: str = '1h') -> pd.DataFrame:
         """
         Merges quagmire dataframe with ctd data frame on utc time by station. The CnvProcessor 
@@ -296,7 +320,7 @@ class MooringAggregator(Aggregator):
 
         # Calculate the expanded time window for mooring data
         pps_df['pps_expanded_start'] = pps_df[self.PPS_UTC_START_TIME_COL] - pps_time_buffer
-        pps_df['pps_expanded_end'] = pps_df[self.PPS_UTC_START_TIME_COL] + pps_time_buffer
+        pps_df['pps_expanded_end'] = pps_df[self.PPS_UTC_END_TIME_COL] + pps_time_buffer
 
         numeric_cols = moor_df.select_dtypes(include=[np.number]).columns.tolist()
         
@@ -312,15 +336,24 @@ class MooringAggregator(Aggregator):
             ]
 
             if len(time_match) > 0:
+               
                 # calculate averages for numeric columns
                 averaged_data = time_match[numeric_cols].mean()
 
+                # Calculate standard deviations for numeric columns
+                std_dev_data = time_match[numeric_cols].std() # <-- NEW LINE
+
                 # Create result row
-                result_row = pps_row
+                result_row = pps_row.copy()
 
                 # Add averaged values
                 for col in numeric_cols:
                     result_row[col] = averaged_data[col]
+
+                # Add standard deviation values (New Block)
+                for col in numeric_cols:
+                    # Name the new column with the "_std_dev" suffix
+                    result_row[f'{col}_std_dev'] = std_dev_data[col]
 
                 # Add count of matched rows and mooring min/and max dates that matched to pps. Add the moor_station id column back in (this is just adding it back in, the pps and moor station cols were matched above)
                 result_row['moor_min_date'] = time_match[self.MOORING_DATE_COL].min()
@@ -381,15 +414,24 @@ class MooringAggregator(Aggregator):
             ]
 
             if len(time_match) > 0:
+    
                 # calculate averages for numeric columns
                 averaged_data = time_match[numeric_cols].mean()
 
+                # Calculate standard deviations for numeric columns
+                std_dev_data = time_match[numeric_cols].std() # <-- NEW LINE
+
                 # Create result row
-                result_row = pps_row
+                result_row = pps_row.copy()
 
                 # Add averaged values
                 for col in numeric_cols:
                     result_row[col] = averaged_data[col]
+
+                # Add standard deviation values (New Block)
+                for col in numeric_cols:
+                    # Name the new column with the "_std_dev" suffix
+                    result_row[f'{col}_std_dev'] = std_dev_data[col]
 
                 # Add count of matched rows and mooring min/and max dates that matched to pps. Add the moor_station id column back in (this is just adding it back in, the pps and moor station cols were matched above)
                 result_row['ocean_model_min_date'] = time_match[ocean_model_time_col].min()
@@ -421,12 +463,15 @@ class MooringAggregator(Aggregator):
         """
         try:
             local_tz = pytz.timezone(timezone) # get the timezone object using pytz
+           
 
             # Localize the naive datetime object
             aware_dt = local_tz.localize(local_dt)
+         
 
             # convert the aware datetime to UTC
             utc_dt = aware_dt.astimezone(pytz.utc)
+  
             # formatted_string = utc_dt.strftime('%Y-%m-%d %H:%M:%S') 
             return utc_dt
         except ValueError as e:

@@ -64,7 +64,7 @@ class NetcdfProcessor:
         depth_filtered_df = df[df[depth_var_name].between(max_depth, min_depth)]
    
         # Performe the depth averageing by grouping by time. mean() calculates the average for all numeric columns
-        final_df = depth_filtered_df.groupby(time_dim_name, as_index=False).mean(numeric_only=True)
+        final_df = depth_filtered_df.groupby(time_dim_name, as_index=False).mean() # numeric_only=True
 
         units_dict = self.get_units_from_nc_vars(original_xr_ds=ds)
         column_unit_dict = {
@@ -73,6 +73,7 @@ class NetcdfProcessor:
         }
         final_df.rename(columns=column_unit_dict, inplace=True)
         final_df['station'] = station
+
         return final_df
 
 
