@@ -49,7 +49,6 @@ class MooringAggregator(Aggregator):
         self.ocean_model_depth_var = self.config_file['ocean_model_data']['depth_variable_name']
         self.ocean_model_time_dim_name = self.config_file['ocean_model_data']['time_dim_name']
         self.ocean_model_df = self.convert_ocean_model_nc_to_df()
-        self.ocean_model_df.to_csv('model.csv')
 
     def FINALmerge_quag_pps_mooring_oceanmodel(self):
         """
@@ -140,24 +139,27 @@ class MooringAggregator(Aggregator):
     def convert_ocean_model_nc_to_df(self) -> pd.DataFrame:
 
         nc_dfs = []
+    
         for nc_file in self.model_data_files:
-            # Get station applicable to file
-            for station in self.quag_station_sites:
-                if station in nc_file:
-                    station = station
-            nc_processor = NetcdfProcessor(nc_file=nc_file)
-            nc_df = nc_processor.convert_rom_ocean_model_to_df(min_depth=self.quag_min_depth,
-                                                               max_depth=self.quag_max_depth,
-                                                               depth_var_name=self.ocean_model_depth_var,
-                                                               time_dim_name=self.ocean_model_time_dim_name,
-                                                               start_time=self.quag_min_date,
-                                                               end_time=self.quag_max_date, 
-                                                               station=station)
-            nc_dfs.append(nc_df)
-
+            # Find first matching station  (or None if no match)
+            matching_station = next(
+                (station for station in self.quag_station_sites if station in nc_file),
+                None
+            )
+            if matching_station:
+                nc_processor = NetcdfProcessor(nc_file=nc_file)
+                nc_df = nc_processor.convert_rom_ocean_model_to_df(min_depth=self.quag_min_depth,
+                                                                max_depth=self.quag_max_depth,
+                                                                depth_var_name=self.ocean_model_depth_var,
+                                                                time_dim_name=self.ocean_model_time_dim_name,
+                                                                start_time=self.quag_min_date,
+                                                                end_time=self.quag_max_date, 
+                                                                station=matching_station)
+                nc_dfs.append(nc_df)
         df = pd.concat(nc_dfs, ignore_index=True)
         df = df.add_prefix('model_')
         df_cleaned = df.dropna(axis=1, how='all')
+        print(f"stations: {df_cleaned['model_station'].unique()}")
         return df_cleaned
 
     def convert_ctd_cnv_files_to_df(self) -> pd.DataFrame:
@@ -397,29 +399,38 @@ class MooringAggregator(Aggregator):
         ocean_model_df[ocean_model_time_col] = pd.to_datetime(ocean_model_df[ocean_model_time_col]).dt.tz_localize('UTC')
 
         # Calculate the expanded time window for mooring data
-        pps_df['pps_expanded_start'] = pps_df[self.PPS_UTC_START_TIME_COL] - pps_time_buffer
-        pps_df['pps_expanded_end'] = pps_df[self.PPS_UTC_END_TIME_COL] + pps_time_buffer
+        pps_df['pps_expanded_start'] = pd.to_datetime(pps_df[self.PPS_UTC_START_TIME_COL] - pps_time_buffer)
+        pps_df['pps_expanded_end'] = pd.to_datetime(pps_df[self.PPS_UTC_END_TIME_COL] + pps_time_buffer)
 
+        pps_df['pps_expanded_start_date'] = pps_df['pps_expanded_start'].dt.date
+
+        pps_df['pps_expanded_end_date'] = pps_df['pps_expanded_end'].dt.date 
+
+        ocean_model_df['ocean_model_merge_dt'] = ocean_model_df[ocean_model_time_col].dt.date
+
+
+        # ... (numeric_cols definition remains the same)
         numeric_cols = ocean_model_df.select_dtypes(include=[np.number]).columns.tolist()
-        
+
         results = []
 
         for idx, pps_row in pps_df.iterrows():
-            # Find matching moor_df rows by station and expanded time window
+            # Find matching moor_df rows by station
             station_match = ocean_model_df[ocean_model_df[self.OCEAN_MODEL_STATION_COL] == pps_row[self.PPS_STATION_ID_COL]]
 
-            time_match = station_match[
-                (station_match[ocean_model_time_col] >= pps_row['pps_expanded_start']) &
-                (station_match[ocean_model_time_col] <= pps_row['pps_expanded_end'])
+            # FIX 2: Use the correct, distinct column names for comparison.
+            date_match = station_match[
+                (station_match['ocean_model_merge_dt'] >= pps_row['pps_expanded_start_date']) &
+                (station_match['ocean_model_merge_dt'] <= pps_row['pps_expanded_end_date'])
             ]
 
-            if len(time_match) > 0:
+            if len(date_match) > 0:
     
                 # calculate averages for numeric columns
-                averaged_data = time_match[numeric_cols].mean()
+                averaged_data = date_match[numeric_cols].mean()
 
                 # Calculate standard deviations for numeric columns
-                std_dev_data = time_match[numeric_cols].std() # <-- NEW LINE
+                std_dev_data = date_match[numeric_cols].std() 
 
                 # Create result row
                 result_row = pps_row.copy()
@@ -434,10 +445,10 @@ class MooringAggregator(Aggregator):
                     result_row[f'{col}_std_dev'] = std_dev_data[col]
 
                 # Add count of matched rows and mooring min/and max dates that matched to pps. Add the moor_station id column back in (this is just adding it back in, the pps and moor station cols were matched above)
-                result_row['ocean_model_min_date'] = time_match[ocean_model_time_col].min()
-                result_row['ocean_model_max_date'] = time_match[ocean_model_time_col].max()
+                result_row['ocean_model_min_date'] = date_match[ocean_model_time_col].min()
+                result_row['ocean_model_max_date'] = date_match[ocean_model_time_col].max()
                 result_row[self.OCEAN_MODEL_STATION_COL] = pps_row[self.PPS_STATION_ID_COL]
-                result_row['ocean_model_count_avg'] = len(time_match)
+                result_row['ocean_model_count_avg'] = len(date_match)
                     
                 results.append(result_row)
 
