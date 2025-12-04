@@ -30,6 +30,7 @@ ctd_data:
 ocean_model_data:
   model_nc_files:
     - /Users/zalmanek/Development/PMEL-OME-OCNMS/Ella_combined_20250530/Reed-Thesis-Copepod-Populations/LiveOceanTH042_2021_2023.nc
+    - /Users/zalmanek/Development/PMEL-OME-OCNMS/Brynn_OCNMS_data_reorganized/CE042_live_ocean_mode/OCNMS_cas7_t0_x4b_lowpass_2013_2023 2/CE042_2013.01.01_2023.12.31.nc
   depth_variable_name: z_rho # The name of the variable that holds the physical depth information (e.g. z_rho)
   time_dim_name: ocean_time # The name of the time dimension in the ocean model data
   
