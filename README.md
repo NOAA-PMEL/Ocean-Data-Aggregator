@@ -3,7 +3,7 @@
 1. Mooring data (`.mat` files). May only work for OCNMS .mat files
 2. PPS data (`.txt` files)
 3. Ocean Model data (.nc files)
-4. CTD data (`.ros` files, or .cnv files, or .nc files)
+4. CTD data (`.ros` files, or `.cnv` files, or `.nc` files)
 5. Bottle data (`.csv` files)
 6. Nutrient data (`.csv` files)
 
