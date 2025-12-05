@@ -22,7 +22,7 @@ See projects' nested `main.py` files to understand how to use. Depending on the 
    - step 1: merges the quagmire with the ctd data on station and utc time.
    - step 2. Merges that df with mooring data on station and utc time.
    - step 3: Merges that df with ocean model data on station and utc time.
-##### CTDBottleAggregator:
+##### CTDBottleAggregator module methods:
 1. `FINALmerge_quag_ctd_btl_nutrient_for_missing_btlNumbers`: merges the quagmire, bottle, ctd, and nutrient data together, but used in case the bottle numbers are missing for some of the data.
    - step 1: Merges the ctd data with the bottle data on cast and pressure.
    - step 2: Merges that df with the quagmire on cast and rosette
