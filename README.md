@@ -7,7 +7,7 @@
 5. Bottle data (.csv files)
 6. Nutrient data (.csv files)
 
-So far this has only been tested with OCMS and EcoFoci's DY2306 and SKQ2021-15S.
+So far this has only been tested with OCNMS and EcoFoci's DY2306 and SKQ2021-15S.
 
 See projects' nested `main.py` files to understand how to use. Depending on the merge needed, may need to write new merge methods. 
 
