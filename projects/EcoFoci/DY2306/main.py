@@ -1,4 +1,4 @@
-from utils.ctd_bottle_aggregator import CtdBottleAggregator
+from modules.aggregator.ctd_bottle_aggregator import CtdBottleAggregator
 import pandas as pd
 
 ctd_bottle_aggregator = CtdBottleAggregator(config_yaml='/Users/zalmanek/Development/Ocean-Data-Aggregator/projects/EcoFoci/DY2306/config.yaml')

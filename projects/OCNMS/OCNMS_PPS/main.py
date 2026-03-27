@@ -1,5 +1,5 @@
-from utils.mooring_aggregator import MooringAggregator
-from utils.aggregator import Aggregator
+from modules.aggregator.mooring_aggregator import MooringAggregator
+from modules.aggregator.aggregator import Aggregator
 
 from projects.OCNMS.OCNMS_CTD.main import fix_long_cruise_code
 

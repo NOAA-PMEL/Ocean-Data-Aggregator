@@ -1,6 +1,6 @@
-from utils.mooring_aggregator import MooringAggregator
-from utils.mat_file_processor import MatFileProcessor
-from utils.ros_processor import RosProcessor
+from modules.aggregator.mooring_aggregator import MooringAggregator
+from modules.aggregator.mat_file_processor import MatFileProcessor
+from modules.aggregator.ros_processor import RosProcessor
 import pandas as pd
 from projects.OCNMS.fix_long_cruise_codes import fix_long_cruise_code, ocnms_short_long_cruises
 
