@@ -69,7 +69,11 @@ def main() -> None:
 
 
     final_df = merge_dfs(samp_df=sample_df, env_df=env_df)
-    print(final_df)
+    final_df['Negative_control'] = 'FALSE'
+
+    # Fix the incorrect longitude
+    final_df = final_df.replace('118 14.9357 N', '118 14.9357 W')
+    
     final_df.to_csv('/Users/zalmanek/Development/Ocean-Data-Aggregator/projects/WCOA_netTow/FinalOMEMerge_WCOA_netTow.csv', index=False)
 if __name__ == "__main__":
     main()
